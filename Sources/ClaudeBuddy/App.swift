@@ -15,6 +15,7 @@ struct ClaudeBuddyApp: App {
             Divider()
             Button(delegate.panelVisible ? "Hide Buddy" : "Show Buddy") { delegate.toggle() }
                 .keyboardShortcut("b")
+            Toggle("Hot corner (bottom right)", isOn: Binding(get: { delegate.hotCorner }, set: { delegate.hotCorner = $0 }))
             Button("Reset position") { delegate.panel?.resetPosition() }
             Button("Play demo") { model.demo() }
             Button("Do a trick") { model.trick() }
@@ -39,6 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private(set) var panel: BuddyPanel?
     private var server: EventServer?
     @Published var panelVisible = true
+    /// Hot-corner mode: the buddy stays faded out until the mouse hits the bottom-right corner of its screen,
+    /// hovers over it, or a character needs input.
+    @Published var hotCorner = UserDefaults.standard.bool(forKey: "hotCorner") {
+        didSet { UserDefaults.standard.set(hotCorner, forKey: "hotCorner"); if !hotCorner { setShown(true) } }
+    }
+    private var poll: Timer?
+    private var revealedUntil = Date.distantPast
+    private var shown = true
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -53,6 +62,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         panel.placeInitially()
         panel.orderFrontRegardless()
         self.panel = panel
+
+        poll = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.pollHotCorner() }
+        }
 
         do {
             server = try EventServer { [weak self] path, data in
@@ -79,7 +92,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func toggle() {
         guard let panel else { return }
-        if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless() }
+        if panel.isVisible { panel.orderOut(nil) } else { panel.orderFrontRegardless(); if !hotCorner { setShown(true) } }
         panelVisible = panel.isVisible
+    }
+
+    // MARK: - Hot corner
+
+    private func pollHotCorner() {
+        guard hotCorner, panelVisible, let panel else { return }
+        let mouse = NSEvent.mouseLocation
+        let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens[0]
+        let corner = CGPoint(x: screen.frame.maxX, y: screen.frame.minY)
+        let inCorner = abs(mouse.x - corner.x) <= 8 && abs(mouse.y - corner.y) <= 8
+        let overPanel = shown && panel.frame.insetBy(dx: -24, dy: -24).contains(mouse)
+        let needsInput = SessionModel.shared.agents.contains { $0.needsInput }
+        let now = Date()
+        if inCorner || overPanel || needsInput { revealedUntil = now.addingTimeInterval(1.5) }
+        setShown(now < revealedUntil)
+    }
+
+    private func setShown(_ on: Bool) {
+        guard on != shown, let panel else { return }
+        shown = on
+        panel.ignoresMouseEvents = !on
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = on ? 0.2 : 0.4
+            panel.animator().alphaValue = on ? 1 : 0
+        }
     }
 }
