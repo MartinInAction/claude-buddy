@@ -7,7 +7,7 @@ struct BuddyStrip: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
-            HStack(alignment: .bottom, spacing: 6) {
+            HStack(alignment: .bottom, spacing: 4) {
                 if model.agents.isEmpty {
                     CharacterView(agent: nil, date: ctx.date)
                 } else {
@@ -18,8 +18,8 @@ struct BuddyStrip: View {
                 }
             }
             .animation(.spring(duration: 0.35), value: model.agents.map(\.id))
-            .padding(.horizontal, 10)
-            .padding(.bottom, 4)
+            .padding(.horizontal, 6)
+            .padding(.bottom, 2)
             .fixedSize()
         }
         .background(GeometryReader { geo in
@@ -34,11 +34,11 @@ struct CharacterView: View {
     let agent: Agent?
     let date: Date
 
-    private var scale: CGFloat { (agent?.isSubagent ?? false) ? 3 : 4 }
+    private var scale: CGFloat { (agent?.isSubagent ?? false) ? 1.5 : 2 }
     private var pose: Pose { agent?.pose ?? .sleep }
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 1) {
             bubble
             sprite
             label
@@ -67,23 +67,23 @@ struct CharacterView: View {
     @ViewBuilder private var bubble: some View {
         let text = agent?.bubble
         Text(text ?? " ")
-            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .font(.system(size: 9, weight: .medium, design: .rounded))
             .lineLimit(1)
-            .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(.white.opacity(0.15)))
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.white.opacity(0.15)))
             .opacity(text == nil ? 0 : 1)
-            .frame(maxWidth: 220)
+            .frame(maxWidth: 160)
     }
 
     @ViewBuilder private var label: some View {
         let ctx = agent?.contextTokens.map { " · \(ContextMeter.format($0))" } ?? ""
         Text((agent?.label ?? "zzz") + ctx)
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
             .lineLimit(1)
-            .padding(.horizontal, 6).padding(.vertical, 2)
+            .padding(.horizontal, 5).padding(.vertical, 1.5)
             .background(.regularMaterial, in: Capsule())
-            .frame(maxWidth: CGFloat(SpriteSheets.frameSize) * scale + 40)
+            .frame(maxWidth: CGFloat(SpriteSheets.frameSize) * scale + 60)
             .opacity(agent == nil ? 0.5 : 1)
     }
 }
