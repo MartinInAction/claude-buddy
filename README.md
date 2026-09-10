@@ -4,6 +4,11 @@ A tiny always-on-top macOS widget: a pixel-art character that shows what Claude 
 It reads, types, runs commands, raises a hand when Claude is waiting for you, and spawns smaller
 clones for every subagent — each clone animates its own work and waves goodbye when it finishes.
 
+<p align="center"><img src="docs/demo.png" width="386" alt="Claude Buddy showing a main session running Bash and an idle Explore subagent"></p>
+
+Each Claude Code session gets its own buddy labelled with the project folder; subagents appear as
+smaller tinted clones beside it, and the character grows as the context window fills up.
+
 No hacks: Claude Code's built-in **HTTP hooks** POST every lifecycle event to `http://127.0.0.1:4789/event`.
 The app is a ~500-line Swift package with a minimal HTTP listener and a SwiftUI sprite renderer.
 
