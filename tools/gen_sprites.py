@@ -3,10 +3,10 @@
 
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
-Rows come in FAT_LEVELS blocks of 9: block 0 is the normal body, each further block is a wider one
+Rows come in FAT_LEVELS blocks of 10: block 0 is the normal body, each further block is a wider one
 (used as the agent's context window fills up). Within a block the row order must match
 `Pose` in Sources/ClaudeBuddy/Model.swift:
-  0 idle  1 read  2 type  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn
+  0 idle  1 read  2 type  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat
 Replace these PNGs with your own art as long as you keep the same grid.
 """
 import struct, zlib, os, sys
@@ -37,6 +37,8 @@ BASE = {
     'd': rgb('60a5fa'),   # sweat drop
     'y': rgb('facc15'),   # sparkle
     'z': rgb('94a3b8'),   # zzz
+    'c': rgb('c98b4b'),   # cookie
+    'C': rgb('5a3a1a'),   # chocolate chips
 }
 TINTS = [
     ('e8734a', 'c4552f'),  # 0 main: coral
@@ -154,6 +156,7 @@ class Body:
         elif arms == 'up_right': self.arms_down(f, y); self.arm_up(f, y, +1)
         elif arms == 'forward': self.arms_forward(f, y, 12)
         elif arms == 'out': self.arms_out(f, y)
+        elif arms == 'eat': self.arms_eat(f, y)
 
     # props, positioned relative to the body
     def book(self, f, flip):
@@ -170,6 +173,20 @@ class Body:
     def sweat(self, f, phase):
         x, y = self.ox + self.W - 1, OY + 3 + phase
         f.put(x, y, 'd'); f.put(x, y+1, 'd'); f.put(x-1, y+1, 'd'); f.put(x, y+2, 'd')
+
+    def cookie(self, f, bitten):
+        art = [".ccc.", "cCcCc", ".ccC."] if not bitten else ["..cc.", ".cCcc", "..cC."]
+        # held just below the mouth so the eyes stay visible
+        f.blit(art, self.ox + self.W // 2 - 1, OY + 6)
+
+    def arms_eat(self, f, y):
+        # both hands raised to the mouth
+        for col, outer in ((self.L(), self.L()-1), (self.R(), self.R()+1)):
+            for j in range(8, 13): f.put(col, y+j, 'h'); f.put(outer, y+j, 'o')
+            f.put(outer, y+7, 'o'); f.put(col, y+7, 's'); f.put(col, y+13, 'o'); f.put(outer, y+13, 'o')
+        # forearms towards the centre at row 7, hands next to the cookie
+        for i in range(self.L()+1, self.ox + self.W // 2 - 1): f.put(i, y+7, 's'); f.put(i, y+6, 'o'); f.put(i, y+8, 'o')
+        for i in range(self.ox + self.W // 2 + 4, self.R()): f.put(i, y+7, 's'); f.put(i, y+6, 'o'); f.put(i, y+8, 'o')
 
     def zzz(self, f, phase):
         x, y = self.ox + self.W, OY - 1 - phase
@@ -198,6 +215,10 @@ def make_block(extra):
     a, c = fr(head='wide', arms='out'), fr(head='wide', y_off=1, arms='out'); b.sweat(a, 0); b.sweat(c, 1); rows.append([a, c])  # oops
     a = fr(head='happy', arms='up_right'); c = fr(head='happy', y_off=1, arms='up_right'); c.put(b.R()+2, OY+4, 's'); c.put(b.R()+2, OY+3, 'o'); rows.append([a, c])  # wave
     a, c = fr(head='happy', arms='out'), fr(head='happy', y_off=1, arms='out'); sparkles(a, 0); sparkles(c, 1); rows.append([a, c])  # spawn
+    a = fr(head='happy', arms='eat'); b.cookie(a, False)
+    c = fr(head='blink', arms='eat'); b.cookie(c, True)
+    d = fr(head='happy', y_off=1, arms='eat'); b.cookie(d, True)
+    rows.append([a, c, d])                                                                                # eat
     return rows
 
 def make_frames():

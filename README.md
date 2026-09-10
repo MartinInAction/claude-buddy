@@ -44,6 +44,7 @@ position is remembered.
 | `PostToolUseFailure` | startled, sweat drop |
 | `PermissionRequest`, `Notification` permission_prompt | hand raised, "may I?" |
 | `Stop`, `Notification` idle_prompt | idle loop with blink |
+| context grew since last check | eating a cookie, "nom nom · +12k" |
 | 60 s without events | sleeping |
 | `SessionEnd` | waves, disappears |
 
@@ -60,6 +61,6 @@ Multiple concurrent Claude sessions each get their own character (labelled with 
 
 Sprite sheets live in `Sources/ClaudeBuddy/Resources/buddy.png` (main) and `buddy_1..4.png` (clone tints).
 Grid: 32×32 px frames, 4 columns, one animation per row in this order:
-`idle(4) read(2) type(2) run(2) wait(2) sleep(2) oops(2) wave(2) spawn(2)`,
+`idle(4) read(2) type(2) run(2) wait(2) sleep(2) oops(2) wave(2) spawn(2) eat(3)`,
 repeated as one block per fat level (normal → fattest; the app derives the level count from the sheet height).
 Drop in your own PNGs with the same grid and rebuild. Frame counts / fps per row are in `Pose` in `Model.swift`.

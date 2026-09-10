@@ -3,12 +3,13 @@ import Observation
 
 /// One animation row in the sprite sheet. Row order must match tools/gen_sprites.py.
 enum Pose: Int, CaseIterable {
-    case idle = 0, read, type, run, wait, sleep, oops, wave, spawn
+    case idle = 0, read, type, run, wait, sleep, oops, wave, spawn, eat
 
     var row: Int { rawValue }
     var frameCount: Int {
         switch self {
         case .idle: return 4
+        case .eat: return 3
         default: return 2
         }
     }
@@ -238,7 +239,13 @@ final class SessionModel {
             let tokens = url.flatMap(ContextMeter.contextTokens(at:))
             guard let tokens else { return }
             DispatchQueue.main.async { [weak self] in
-                self?.agents.first(where: { $0.id == id })?.contextTokens = tokens
+                guard let agent = self?.agents.first(where: { $0.id == id }) else { return }
+                let previous = agent.contextTokens
+                agent.contextTokens = tokens
+                // Context grew: nom nom. Don't interrupt a raised hand (waiting for the user).
+                if let previous, tokens > previous + 1_000, agent.pose != .wait, !agent.leaving {
+                    agent.set(.eat, bubble: "nom nom · +\(ContextMeter.format(tokens - previous))")
+                }
             }
         }
     }
@@ -256,7 +263,7 @@ final class SessionModel {
                 continue
             }
             switch a.pose {
-            case .spawn, .oops, .wave:
+            case .spawn, .oops, .wave, .eat:
                 if sincePose > 2 { a.set(.idle, bubble: a.bubble) }
             case .read, .type, .run:
                 if sinceEvent > 4 { a.set(.idle, bubble: nil) }
