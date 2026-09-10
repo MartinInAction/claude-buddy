@@ -4,21 +4,42 @@ import Observation
 /// One animation row in the sprite sheet. Row order must match tools/gen_sprites.py.
 enum Pose: Int, CaseIterable {
     case idle = 0, read, type, run, wait, sleep, oops, wave, spawn, eat, mine
+    case coffee, dance, stretch, juggle
 
     var row: Int { rawValue }
     var frameCount: Int {
         switch self {
-        case .idle, .mine: return 4
-        case .eat: return 3
+        case .idle, .type, .mine, .coffee, .dance, .juggle: return 4
+        case .eat, .stretch: return 3
         default: return 2
         }
     }
     var fps: Double {
         switch self {
-        case .idle: return 1.5
+        case .idle, .stretch: return 1.5
         case .sleep: return 1
-        case .type, .run, .mine: return 6
+        case .coffee: return 2
+        case .dance: return 4
+        case .juggle: return 5
+        case .type: return 4
+        case .run, .mine: return 6
         default: return 3
+        }
+    }
+
+    /// Short tricks the character performs at random while idle (stretching is scripted before sleep).
+    static let easterEggs: [Pose] = [.coffee, .dance, .juggle]
+    var isEasterEgg: Bool { Self.easterEggs.contains(self) || self == .stretch }
+    /// How long a trick plays before the character goes back to idling.
+    static let easterEggDuration: TimeInterval = 4
+
+    var caption: String? {
+        switch self {
+        case .coffee: return "coffee break ☕"
+        case .dance: return "♪ dance break ♪"
+        case .stretch: return "*yawn*"
+        case .juggle: return "juggling"
+        default: return nil
         }
     }
 }
@@ -32,6 +53,8 @@ struct BuddyEvent {
     let toolName: String?
     let toolInput: [String: Any]
     let notificationType: String?
+    /// Human-readable text of a `Notification` hook (e.g. the question Claude is asking).
+    let message: String?
     let cwd: String?
     let transcriptPath: String?
 
@@ -45,6 +68,7 @@ struct BuddyEvent {
         toolName = obj["tool_name"] as? String
         toolInput = obj["tool_input"] as? [String: Any] ?? [:]
         notificationType = obj["notification_type"] as? String
+        message = obj["message"] as? String
         cwd = obj["cwd"] as? String
         transcriptPath = obj["transcript_path"] as? String
     }
@@ -71,6 +95,13 @@ struct BuddyEvent {
         let firstLine = t.split(separator: "\n").first.map(String.init) ?? t
         return "\(label) · \(firstLine.count > 26 ? String(firstLine.prefix(25)) + "…" : firstLine)"
     }
+
+    /// The notification message, trimmed to fit a two-line speech bubble.
+    var question: String? {
+        guard let m = message?.trimmingCharacters(in: .whitespacesAndNewlines), !m.isEmpty else { return nil }
+        let oneLine = m.split(whereSeparator: \.isNewline).joined(separator: " ")
+        return oneLine.count > 60 ? String(oneLine.prefix(59)) + "…" : oneLine
+    }
 }
 
 @Observable
@@ -82,6 +113,8 @@ final class Agent: Identifiable {
     let tint: Int
     var pose: Pose = .idle
     var bubble: String?
+    /// Claude is blocked on the user (permission, question, elicitation): show `bubble` in a speech bubble.
+    var needsInput = false
     var lastEvent = Date()
     var leaving = false
     var poseStarted = Date()
@@ -106,11 +139,26 @@ final class Agent: Identifiable {
         self.label = label; self.tint = tint
     }
 
-    func set(_ pose: Pose, bubble: String? = nil) {
+    func set(_ pose: Pose, bubble: String? = nil, needsInput: Bool = false) {
         self.pose = pose
         self.bubble = bubble
+        self.needsInput = needsInput
         poseStarted = Date()
         lastEvent = Date()
+    }
+
+    /// Plays a trick without counting as activity, so the idle/sleep countdown keeps running.
+    func play(_ pose: Pose) {
+        self.pose = pose
+        bubble = pose.caption
+        poseStarted = Date()
+    }
+
+    /// Back to idling after a trick; `lastEvent` is left alone on purpose.
+    func settle(now: Date) {
+        pose = .idle
+        bubble = nil
+        poseStarted = now
     }
 }
 
@@ -170,14 +218,17 @@ final class SessionModel {
             let target = actor(for: e)
             // Keep the pose visible for a moment; the tick() will settle it to idle.
             target.lastEvent = Date()
+            target.needsInput = false   // a tool ran, so any pending permission was granted
         case "PostToolUseFailure":
             actor(for: e).set(.oops, bubble: e.hint.map { "oops · \($0)" } ?? "oops")
         case "PermissionRequest":
-            actor(for: e).set(.wait, bubble: e.hint.map { "may I? \($0)" } ?? "may I?")
+            actor(for: e).set(.wait, bubble: e.hint.map { "may I? \($0)" } ?? "may I?", needsInput: true)
         case "Notification":
             switch e.notificationType ?? "" {
-            case "permission_prompt", "agent_needs_input", "elicitation_dialog":
-                main(for: e).set(.wait, bubble: "waiting for you…")
+            case "permission_prompt":
+                main(for: e).set(.wait, bubble: e.question ?? "may I?", needsInput: true)
+            case "agent_needs_input", "elicitation_dialog":
+                main(for: e).set(.wait, bubble: e.question ?? "your turn!", needsInput: true)
             case "idle_prompt":
                 main(for: e).set(.idle, bubble: nil)
             default: break
@@ -271,7 +322,15 @@ final class SessionModel {
                 if sinceEvent > 4 { a.set(.idle, bubble: nil) }
             case .idle:
                 if sinceEvent > 8 { a.bubble = nil }
-                if sinceEvent > 60 { a.pose = .sleep; a.poseStarted = now }
+                if sinceEvent > 60 {
+                    a.pose = .sleep; a.poseStarted = now
+                } else if sinceEvent > 55, sincePose > 3 {
+                    a.play(.stretch)                       // big yawn right before falling asleep
+                } else if sinceEvent > 10, sinceEvent < 50, sincePose > 6, Int.random(in: 0..<20) == 0 {
+                    a.play(Pose.easterEggs.randomElement()!)   // ~one trick per 20 s of idling, none right before the yawn
+                }
+            case .coffee, .dance, .juggle, .stretch:
+                if sincePose > Pose.easterEggDuration { a.settle(now: now) }
             case .sleep, .wait, .mine:
                 break
             }
@@ -285,6 +344,13 @@ final class SessionModel {
     }
 
     func clear() { agents.removeAll() }
+
+    /// Menu item: every idle character performs a random trick.
+    func trick() {
+        for a in agents where !a.leaving && a.pose != .wait {
+            a.play(Pose.easterEggs.randomElement()!)
+        }
+    }
 
     /// Used by the "Play demo" menu item.
     func demo() {
@@ -305,8 +371,10 @@ final class SessionModel {
             (12.0, ["hook_event_name": "SubagentStop", "agent_id": "demo-sub-1", "agent_type": "Explore"]),
             (13.5, ["hook_event_name": "PostToolUseFailure", "tool_name": "Bash", "tool_input": ["command": "npm run typecheck"]]),
             (16.0, ["hook_event_name": "PermissionRequest", "tool_name": "Bash", "tool_input": ["command": "git push"]]),
-            (20.0, ["hook_event_name": "Stop"]),
-            (24.0, ["hook_event_name": "SessionEnd"]),
+            (19.0, ["hook_event_name": "PostToolUse", "tool_name": "Bash"]),
+            (20.0, ["hook_event_name": "Notification", "notification_type": "agent_needs_input", "message": "Which library should we use for dates?"]),
+            (24.0, ["hook_event_name": "Stop"]),
+            (28.0, ["hook_event_name": "SessionEnd"]),
         ]
         for (delay, dict) in script {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in

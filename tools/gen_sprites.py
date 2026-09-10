@@ -3,10 +3,11 @@
 
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
-Rows come in FAT_LEVELS blocks of 11: block 0 is the normal body, each further block is a wider one
-(used as the agent's context window fills up). Within a block the row order must match
-`Pose` in Sources/ClaudeBuddy/Model.swift:
-  0 idle  1 read  2 type  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
+Rows come in FAT_LEVELS blocks of 15: block 0 is the normal body, each further block is a wider one
+(used as the agent's context window fills up; level 2 is sweaty, level 3 dizzy and sweaty).
+Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
+  0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
+  11 coffee  12 dance  13 stretch  14 juggle
 Replace these PNGs with your own art as long as you keep the same grid.
 """
 import struct, zlib, os, sys
@@ -14,6 +15,7 @@ import struct, zlib, os, sys
 FRAME = 32
 COLS = 4
 FAT_LEVELS = [0, 2, 4, 6]      # extra body width in px per level
+CONDITIONS = ['fine', 'fine', 'sweaty', 'dizzy']   # per fat level: dizzy implies sweaty
 
 def rgb(h, a=255):
     h = h.lstrip('#'); return (int(h[0:2],16), int(h[2:4],16), int(h[4:6],16), a)
@@ -44,6 +46,8 @@ BASE = {
     'x': rgb('8a5a2b'),   # pickaxe handle
     'X': rgb('cbd5e1'),   # pickaxe head
     'G': rgb('f7931a'),   # bitcoin nugget
+    'M': rgb('6b3e1e'),   # coffee
+    'n': rgb('f472b6'),   # music note
 }
 TINTS = [
     ('e8734a', 'c4552f'),  # 0 main: coral
@@ -95,6 +99,9 @@ HEAD_DOWN  = head_variant("..osssssso..", "..oSeSSeSo..")
 HEAD_WIDE  = head_variant("..owewwewo..")
 HEAD_HAPPY = head_variant("..oseSSeso..", "..oSsSSsSo..")
 HEAD_SLEEP = head_variant("..oSsSSsSo..")
+HEAD_YAWN  = head_variant("..oSsSSsSo..")
+HEAD_YAWN[6] = "..ohSeeSho.."           # closed eyes, mouth wide open
+HEAD_DIZZY = head_variant("..oweSSewo..", "..oewSSweo..")   # swirly two-tone eyes
 
 TORSO = [
     "..ohhhhhho..",
@@ -115,12 +122,14 @@ LEGS = [
 
 class Body:
     """Draws the character at a given extra width. All arm/prop positions derive from W."""
-    def __init__(self, extra):
+    def __init__(self, extra, condition='fine'):
         self.extra = extra
+        self.condition = condition
         self.W = BASE_W + extra
         self.ox = (FRAME - self.W) // 2
         self.head = {k: widen(v, extra) for k, v in dict(open=HEAD_OPEN, blink=HEAD_BLINK, down=HEAD_DOWN,
-                                                          wide=HEAD_WIDE, happy=HEAD_HAPPY, sleep=HEAD_SLEEP).items()}
+                                                          wide=HEAD_WIDE, happy=HEAD_HAPPY, sleep=HEAD_SLEEP,
+                                                          yawn=HEAD_YAWN, dizzy=HEAD_DIZZY).items()}
         self.torso = widen(TORSO, extra)
         self.legs = widen(LEGS, extra)
 
@@ -152,16 +161,35 @@ class Body:
         for i in range(self.L()-4, self.L()+1): f.put(i, y+9, 'o'); f.put(i, y+11, 'o')
         for i in range(self.R(), self.R()+5): f.put(i, y+9, 'o'); f.put(i, y+11, 'o')
 
-    def draw(self, f, head='open', y_off=0, arms='down'):
+    def draw(self, f, head='open', y_off=0, arms='down', x_off=0):
+        # Too much context: the character is dizzy (and sweaty) no matter what it is doing.
+        if self.condition == 'dizzy' and head != 'sleep': head = 'dizzy'
+        self.ox += x_off
         x, y = self.ox, OY + y_off
         f.blit(self.head[head], x, y)
         f.blit(self.torso, x, y+8)
         f.blit(self.legs, x, y+14)
         if arms == 'down': self.arms_down(f, y)
         elif arms == 'up_right': self.arms_down(f, y); self.arm_up(f, y, +1)
+        elif arms == 'up_both': self.arm_up(f, y, -1); self.arm_up(f, y, +1)
         elif arms == 'forward': self.arms_forward(f, y, 12)
         elif arms == 'out': self.arms_out(f, y)
         elif arms == 'eat': self.arms_eat(f, y)
+        self.ox -= x_off
+        self.last_x_off = x_off
+
+    def sweat_overlay(self, f, i):
+        """Animated sweat, added to frame `i` of every row: two drops when sweaty, a shower when dizzy."""
+        if self.condition == 'fine': return
+        xo = getattr(self, 'last_x_off', 0)
+        L, R = self.ox + xo - 1, self.ox + xo + self.W
+        cx = self.ox + xo + self.W // 2
+        drops = [(L, OY + 2, 0), (R, OY + 3, 2)]
+        if self.condition == 'dizzy':
+            drops += [(L - 2, OY + 6, 1), (R + 2, OY + 7, 3), (cx - 3, OY - 3, 2), (cx + 3, OY - 4, 0), (L - 1, OY + 11, 3)]
+        for (x, y0, ph) in drops:
+            y = y0 + (i + ph) % 4          # each drop falls one pixel per frame, then starts over
+            f.put(x, y, 'd'); f.put(x, y + 1, 'd')
 
     # props, positioned relative to the body
     def book(self, f, flip):
@@ -175,9 +203,38 @@ class Body:
                "okKKKKKKKKko", "okkkkkkkkkko", "ookkkkkkkkoo"]
         f.blit(widen(scr, self.extra), self.ox, OY+16)
 
-    def sweat(self, f, phase):
-        x, y = self.ox + self.W - 1, OY + 3 + phase
-        f.put(x, y, 'd'); f.put(x, y+1, 'd'); f.put(x-1, y+1, 'd'); f.put(x, y+2, 'd')
+    def desk(self, f, phase):
+        """Sitting at a desk: chair behind, keyboard in front, monitor on the right with code being typed."""
+        y = OY + 1
+        # chair: backrest peeking out above the shoulders and on both sides of the torso
+        for i in range(self.ox + 1, self.ox + self.W - 1): f.put(i, y + 7, 'P')
+        for j in range(7, 13): f.put(self.ox, y + j, 'P'); f.put(self.ox + self.W - 1, y + j, 'P')
+        # desk top spanning the whole frame, with the monitor standing on it
+        left, right = 1, FRAME - 2
+        for i in range(left, right + 1): f.put(i, y + 13, 'x'); f.put(i, y + 14, 'C')
+        for j in range(15, 20): f.put(left + 1, y + j, 'C'); f.put(right - 1, y + j, 'C')
+        # keyboard in front of the character
+        for i in range(self.L(), self.R() + 1): f.put(i, y + 12, 'k')
+        # hands on the keys, alternating which one is lifted
+        lh, rh = (0, 1) if phase % 2 == 0 else (1, 0)
+        f.put(self.L() + 1, y + 11 - lh, 's'); f.put(self.L() + 2, y + 11 - lh, 's')
+        f.put(self.R() - 2, y + 11 - rh, 's'); f.put(self.R() - 1, y + 11 - rh, 's')
+        # monitor: kept inside the frame even for the widest bodies
+        mx = min(self.R() + 3, FRAME - 9)
+        my = y + 4
+        f.blit(["ooooooooo", "oKKKKKKKo", "oKKKKKKKo", "oKKKKKKKo", "oKKKKKKKo", "ooooooooo", "...oko...", "..ooooo.."], mx, my)
+        lines = [[3, 0, 0, 0], [3, 2, 0, 0], [3, 2, 4, 0], [3, 2, 4, 1]][phase % 4]
+        for r, n in enumerate(lines):
+            for i in range(n): f.put(mx + 1 + i, my + 1 + r, 'g' if (r + i) % 3 else 'd')
+        if phase % 2 == 0:
+            r = max(k for k, n in enumerate(lines) if n)
+            f.put(mx + 1 + lines[r], my + 1 + r, 'B')          # blinking cursor
+
+    def sweat(self, f, phase, side=+1):
+        x, y = (self.ox + self.W - 1 if side > 0 else self.ox), OY + 3 + phase
+        x2 = x - 1 if side > 0 else x + 1
+        f.put(x, y, 'd'); f.put(x, y+1, 'd'); f.put(x2, y+1, 'd'); f.put(x, y+2, 'd')
+
 
     def cookie(self, f, bitten):
         art = [".ccc.", "cCcCc", ".ccC."] if not bitten else ["..cc.", ".cCcc", "..cC."]
@@ -214,6 +271,44 @@ class Body:
             if sparks:
                 for (dx, dy) in [(2, 13), (8, 12), (9, 14), (1, 14)]: f.put(R + dx, y + dy, 'y')
 
+    def mug(self, f, at_mouth, steam):
+        """Coffee mug in the right hand: at chest height, or raised to the mouth."""
+        art = ["oMMMo", "oBBBo", "oBBBo", ".ooo."] if not at_mouth else ["oBBBo", "oBBBo", "oBBBo", ".ooo."]
+        x = self.R() - 1
+        y = OY + (11 if not at_mouth else 5)
+        f.blit(art, x, y)
+        # arm bent up to the mug
+        for j in range(9, 12 if not at_mouth else 9): f.put(self.R(), OY + j, 'h')
+        if at_mouth:
+            for j in range(6, 10): f.put(self.R(), OY + j, 'h'); f.put(self.R() + 1, OY + j, 'o')
+            f.put(self.R(), OY + 5, 's')
+        # steam
+        for dx, dy in ([(1, -2), (3, -3)] if steam == 0 else [(2, -3), (3, -1)]):
+            f.put(x + dx, y + dy, 'z')
+
+    def headphones(self, f, y_off=0, x_off=0):
+        x, y = self.ox + x_off, OY + y_off
+        for i in range(3, self.W - 3): f.put(x + i, y - 1, 'k')
+        f.put(x + 2, y, 'k'); f.put(x + self.W - 3, y, 'k')
+        for j in range(3, 6): f.put(x + 1, y + j, 'k'); f.put(x + self.W - 2, y + j, 'k')
+        f.put(x + 1, y + 2, 'o'); f.put(x + self.W - 2, y + 2, 'o'); f.put(x + 1, y + 6, 'o'); f.put(x + self.W - 2, y + 6, 'o')
+
+    def notes(self, f, phase):
+        note = [".n", ".n", "nn"]
+        if phase == 0:
+            f.blit(note, self.ox - 4, OY + 2); f.blit(note, self.ox + self.W + 2, OY + 5)
+        else:
+            f.blit(note, self.ox - 3, OY + 5); f.blit(note, self.ox + self.W + 3, OY + 1)
+
+    def balls(self, f, phase):
+        """Three balls juggled in an arc above the head; `phase` rotates them."""
+        cx = self.ox + self.W // 2
+        arc = [(cx - 5, OY + 4), (cx - 3, OY - 1), (cx + 1, OY - 3), (cx + 4, OY + 1), (cx + 5, OY + 6)]
+        colors = ['y', 'd', 'c']
+        for k, ch in enumerate(colors):
+            x, y = arc[(k * 2 + phase) % len(arc)]
+            f.put(x, y, ch); f.put(x+1, y, ch); f.put(x, y+1, ch); f.put(x+1, y+1, ch)
+
     def zzz(self, f, phase):
         x, y = self.ox + self.W, OY - 1 - phase
         for (dx, dy) in [(0,0),(1,0),(2,0),(1,1),(0,2),(1,2),(2,2)]: f.put(x+dx, y+dy, 'z')
@@ -227,14 +322,17 @@ def sparkles(f, phase):
     for (x, y) in pts:
         for dx, dy in [(0,0),(-1,0),(1,0),(0,-1),(0,1)]: f.put(x+dx, y+dy, 'y')
 
-def make_block(extra):
-    b = Body(extra)
+def make_block(extra, condition='fine'):
+    b = Body(extra, condition)
     def fr(**kw):
         f = Frame(); b.draw(f, **kw); return f
     rows = []
     a, c, d = fr(), fr(y_off=1), fr(head='blink');           rows.append([a, c, fr(), d])          # idle
     a, c = fr(head='down', arms='forward'), fr(head='down', arms='forward'); b.book(a, False); b.book(c, True); rows.append([a, c])  # read
-    a, c = fr(head='down', arms='forward'), fr(head='down', y_off=1, arms='forward'); b.laptop(a, True); b.laptop(c, False); rows.append([a, c])  # type
+    typing = []
+    for ph in range(4):
+        x = fr(head='down' if ph % 2 == 0 else 'open', y_off=1, arms='forward'); b.desk(x, ph); typing.append(x)
+    rows.append(typing)                                                                                   # type
     a, c = fr(), fr(y_off=1); terminal(a, True); terminal(c, False);                rows.append([a, c])  # run
     rows.append([fr(arms='up_right'), fr(y_off=1, arms='up_right')])                                     # wait
     a, c = fr(head='sleep', y_off=1), fr(head='sleep', y_off=1); b.zzz(a, 0); b.zzz(c, 1); rows.append([a, c])  # sleep
@@ -250,11 +348,30 @@ def make_block(extra):
     d = fr(head='down', y_off=1, arms='forward'); b.pickaxe(d, False, sparks=True)
     e = fr(head='happy', y_off=1, arms='forward'); b.pickaxe(e, False, nugget=True)
     rows.append([a, c, d, e])                                                                             # mine
+    # --- easter eggs ---
+    a = fr(head='happy'); b.mug(a, False, 0)
+    c = fr(head='happy', y_off=1); b.mug(c, False, 1)
+    d = fr(head='blink'); b.mug(d, True, 0)
+    e = fr(head='happy'); b.mug(e, False, 1)
+    rows.append([a, c, d, e])                                                                             # coffee
+    a = fr(head='happy', arms='out', x_off=-1); b.headphones(a, x_off=-1); b.notes(a, 0)
+    c = fr(head='blink'); b.headphones(c)
+    d = fr(head='happy', arms='out', x_off=1); b.headphones(d, x_off=1); b.notes(d, 1)
+    e = fr(head='happy', y_off=1); b.headphones(e, y_off=1)
+    rows.append([a, c, d, e])                                                                             # dance
+    a = fr(head='yawn', arms='up_both'); c = fr(head='yawn', y_off=-1, arms='up_both'); d = fr(head='sleep', y_off=1)
+    rows.append([a, c, d])                                                                                # stretch
+    balls = []
+    for ph in range(4):
+        x = fr(arms='forward'); b.balls(x, ph); balls.append(x)
+    rows.append(balls)                                                                                    # juggle
+    for row in rows:
+        for i, f in enumerate(row): b.sweat_overlay(f, i)
     return rows
 
 def make_frames():
     rows = []
-    for extra in FAT_LEVELS: rows += make_block(extra)
+    for extra, cond in zip(FAT_LEVELS, CONDITIONS): rows += make_block(extra, cond)
     return rows
 
 def write_png(path, width, height, pixels):

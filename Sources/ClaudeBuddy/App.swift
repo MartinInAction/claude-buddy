@@ -17,6 +17,7 @@ struct ClaudeBuddyApp: App {
                 .keyboardShortcut("b")
             Button("Reset position") { delegate.panel?.resetPosition() }
             Button("Play demo") { model.demo() }
+            Button("Do a trick") { model.trick() }
             Button("Clear characters") { model.clear() }
             Divider()
             Picker("Context window", selection: Binding(

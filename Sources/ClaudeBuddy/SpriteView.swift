@@ -156,9 +156,14 @@ struct CharacterView: View {
 
     var body: some View {
         VStack(spacing: 1) {
+            if let agent, agent.needsInput, let text = agent.bubble {
+                SpeechBubble(text: text, date: date)
+                    .transition(.scale(scale: 0.3, anchor: .bottom).combined(with: .opacity))
+            }
             sprite
             description
         }
+        .animation(.spring(duration: 0.3), value: agent?.needsInput ?? false)
         .opacity((agent?.leaving ?? false) ? 0.55 : 1)
     }
 
@@ -189,13 +194,62 @@ struct CharacterView: View {
         }
     }
 
+    /// What the dim pill says. The question itself sits in the speech bubble, so here it just says why nothing is happening.
+    private var activityText: String {
+        guard let agent else { return "waiting for Claude Code" }
+        if agent.needsInput { return "waiting for you" }
+        return agent.bubble ?? (agent.pose == .sleep ? "sleeping" : "idle")
+    }
+
     @ViewBuilder private var agentDescription: some View {
         let name = agent == nil ? "no session" : ((agent?.isSubagent ?? false) ? (agent?.label ?? "agent") : "main")
-        let doing = agent == nil ? "waiting for Claude Code" : (agent?.bubble ?? (agent?.pose == .sleep ? "sleeping" : "idle"))
+        let doing = activityText
         VStack(spacing: 1) {
             Pill(text: name + contextSuffix(agent), maxWidth: 170)
             Pill(text: doing, weight: .regular, maxWidth: 170, dim: true)
         }
+    }
+}
+
+/// Comic-style speech bubble above the head, gently bobbing so it catches the eye.
+struct SpeechBubble: View {
+    let text: String
+    let date: Date
+    var maxWidth: CGFloat = 150
+
+    private var bob: CGFloat {
+        CGFloat(sin(date.timeIntervalSinceReferenceDate * 2 * .pi / 1.2) * 1.5)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(text)
+                .font(.system(size: 7.5, weight: .medium, design: .monospaced))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))
+                .frame(maxWidth: maxWidth)
+            BubbleTail()
+                .fill(.regularMaterial)
+                .overlay(BubbleTail().stroke(.primary.opacity(0.25), lineWidth: 0.5))
+                .frame(width: 7, height: 4)
+                .offset(y: -0.5)
+        }
+        .offset(y: bob)
+        .padding(.bottom, 2)
+    }
+}
+
+/// Small downward-pointing triangle under the bubble.
+struct BubbleTail: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.minX, y: r.minY))
+        p.addLine(to: CGPoint(x: r.midX, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        return p
     }
 }
 
