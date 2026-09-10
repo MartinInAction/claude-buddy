@@ -52,45 +52,27 @@ struct BuddyStrip: View {
     }
 }
 
-/// Main character in the middle; subagents alternate left/right, stacked two per column,
-/// newest nearest the main character.
+/// One session: project title on top, then the main character and its subagents in rows of two.
 struct FamilyView: View {
     let family: Family
     let date: Date
-
-    private var sides: (left: [Agent], right: [Agent]) {
-        var l: [Agent] = [], r: [Agent] = []
-        for (i, a) in family.subs.enumerated() { if i % 2 == 0 { r.append(a) } else { l.append(a) } }
-        return (l, r)
-    }
+    static let perRow = 2
 
     var body: some View {
-        let (left, right) = sides
+        let members = [family.main] + family.subs
+        let rows = stride(from: 0, to: members.count, by: Self.perRow).map { Array(members[$0..<min($0 + Self.perRow, members.count)]) }
         VStack(spacing: 4) {
-            // Project title over the whole session, solo or group.
             Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: 260)
-            HStack(alignment: .bottom, spacing: 4) {
-                columns(left, mirrored: true)
-                CharacterView(agent: family.main, date: date)
-                columns(right, mirrored: false)
-            }
-        }
-        .padding(.horizontal, 4)
-    }
-
-    /// Chunks of two subagents stacked vertically; the first chunk sits next to the main character.
-    @ViewBuilder private func columns(_ subs: [Agent], mirrored: Bool) -> some View {
-        let chunks = stride(from: 0, to: subs.count, by: 2).map { Array(subs[$0..<min($0 + 2, subs.count)]) }
-        HStack(alignment: .bottom, spacing: 2) {
-            ForEach(Array((mirrored ? chunks.reversed() : chunks).enumerated()), id: \.offset) { _, chunk in
-                VStack(spacing: 0) {
-                    ForEach(chunk) { sub in
-                        CharacterView(agent: sub, date: date)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .bottom, spacing: 4) {
+                    ForEach(row) { member in
+                        CharacterView(agent: member, date: date)
                             .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
                     }
                 }
             }
         }
+        .padding(.horizontal, 4)
     }
 }
 
