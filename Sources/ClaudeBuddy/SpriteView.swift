@@ -71,15 +71,7 @@ struct FamilyView: View {
             CharacterView(agent: family.main, date: date)
             columns(right, mirrored: false)
         }
-        .padding(.horizontal, family.subs.isEmpty ? 0 : 6)
-        .padding(.top, family.subs.isEmpty ? 0 : 4)
-        .background {
-            if !family.subs.isEmpty {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.regularMaterial)
-                    .opacity(0.3)
-            }
-        }
+        .padding(.horizontal, family.subs.isEmpty ? 0 : 4)
     }
 
     /// Chunks of two subagents stacked vertically; the first chunk sits next to the main character.
