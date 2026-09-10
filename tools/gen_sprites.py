@@ -5,7 +5,7 @@ Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png 
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
 Rows come in FAT_LEVELS blocks of 16: block 0 is the normal body, each further block is a wider one
 (used as the agent's context window fills up; level 2 is strained: blush, temple drops and a load gauge,
-level 3 overheated: dizzy eyes, gauge blinking red).
+level 3 overheated: dizzy eyes, warning triangle).
 Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
   0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
   11 coffee  12 dance  13 stretch  14 juggle  15 think
@@ -184,7 +184,7 @@ class Body:
 
     def load_overlay(self, f, i):
         """Heavy-load cues added to frame `i` of every row. Strained: blush, a drop on each temple
-        and a load gauge. Overheated: hotter blush, dizzy eyes, gauge blinking red."""
+        and a load gauge. Overheated: hotter blush, dizzy eyes, a pulsing warning triangle."""
         if self.condition == 'fine': return
         hot = self.condition == 'overheated'
         xo = getattr(self, 'last_x_off', 0)
@@ -196,13 +196,15 @@ class Body:
         for x in (x0 - 1, x0 + W):
             y = OY + 3 + i % 2
             f.put(x, y, 'd'); f.put(x, y + 1, 'd')
-        # load gauge above the head
-        gx, gy = cx - 3, OY - 10
-        f.blit(["ooooooo", "o.....o", "ooooooo"], gx, gy)
         if hot:
-            if i % 2 == 0:
-                for k in range(5): f.put(gx + 1 + k, gy + 1, 'F' if k >= 3 else 'G')
+            # warning triangle above the head, pulsing yellow / orange
+            c = 'y' if i % 2 == 0 else 'G'
+            tri = ["...c...", "..ccc..", "..cec..", ".ccecc.", ".ccccc.", "cccescc"[:3] + "e" + "ccc", "ccccccc"]
+            f.blit([row.replace('c', c) for row in tri], cx - 3, OY - 9)
         else:
+            # load gauge above the head
+            gx, gy = cx - 3, OY - 10
+            f.blit(["ooooooo", "o.....o", "ooooooo"], gx, gy)
             for k in range(4): f.put(gx + 1 + k, gy + 1, 'G' if k == 3 else 'y')
 
     def book(self, f, flip):
