@@ -15,7 +15,7 @@ struct ClaudeBuddyApp: App {
             Divider()
             Button(delegate.panelVisible ? "Hide Buddy" : "Show Buddy") { delegate.toggle() }
                 .keyboardShortcut("b")
-            Toggle("Hot corner (bottom right)", isOn: Binding(get: { delegate.hotCorner }, set: { delegate.hotCorner = $0 }))
+            Toggle("Hot corner (bottom left)", isOn: Binding(get: { delegate.hotCorner }, set: { delegate.hotCorner = $0 }))
             Button("Reset position") { delegate.panel?.resetPosition() }
             Button("Play demo") { model.demo() }
             Button("Do a trick") { model.trick() }
@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private(set) var panel: BuddyPanel?
     private var server: EventServer?
     @Published var panelVisible = true
-    /// Hot-corner mode: the buddy stays faded out until the mouse hits the bottom-right corner of its screen,
+    /// Hot-corner mode: the buddy stays faded out until the mouse hits the bottom-left corner of its screen,
     /// hovers over it, or a character needs input.
     @Published var hotCorner = UserDefaults.standard.bool(forKey: "hotCorner") {
         didSet { UserDefaults.standard.set(hotCorner, forKey: "hotCorner"); if !hotCorner { setShown(true) } }
@@ -102,7 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         guard hotCorner, panelVisible, let panel else { return }
         let mouse = NSEvent.mouseLocation
         let screen = panel.screen ?? NSScreen.main ?? NSScreen.screens[0]
-        let corner = CGPoint(x: screen.frame.maxX, y: screen.frame.minY)
+        let corner = CGPoint(x: screen.frame.minX, y: screen.frame.minY)
         let inCorner = abs(mouse.x - corner.x) <= 8 && abs(mouse.y - corner.y) <= 8
         let overPanel = shown && panel.frame.insetBy(dx: -24, dy: -24).contains(mouse)
         let needsInput = SessionModel.shared.agents.contains { $0.needsInput }
