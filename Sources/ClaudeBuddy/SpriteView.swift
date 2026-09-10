@@ -87,8 +87,6 @@ struct FamilyView: View {
                             .frame(width: Cell.character, alignment: .bottom)
                             .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
                     }
-                    // Keep a lone character in the left column instead of centring it.
-                    if row.count < Self.perRow { Spacer().frame(width: Cell.character) }
                 }
             }
         }
