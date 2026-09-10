@@ -4,8 +4,8 @@
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
 Rows come in FAT_LEVELS blocks of 16: block 0 is the normal body, each further block is a wider one
-(used as the agent's context window fills up; level 2 is strained: blush, steam and a load gauge,
-level 3 overheated: dizzy eyes, trembling, gauge blinking red).
+(used as the agent's context window fills up; level 2 is strained: blush, temple drops and a load gauge,
+level 3 overheated: dizzy eyes, gauge blinking red).
 Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
   0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
   11 coffee  12 dance  13 stretch  14 juggle  15 think
@@ -69,11 +69,6 @@ class Frame:
                 if ch != '.': self.put(x+i, y+j, ch)
     def put(self, x, y, ch):
         if 0 <= x < FRAME and 0 <= y < FRAME: self.px[y][x] = ch
-    def shift(self, dx):
-        """Move the whole frame horizontally (used for trembling)."""
-        for y in range(FRAME):
-            row = self.px[y]
-            self.px[y] = ['.'] * dx + row[:FRAME - dx] if dx > 0 else row[-dx:] + ['.'] * -dx
 
 def widen(art, extra):
     """Insert `extra` copies of the middle column so the shape gets fatter but keeps its outline."""
@@ -188,8 +183,8 @@ class Body:
         self.last_x_off = x_off
 
     def load_overlay(self, f, i):
-        """Heavy-load cues added to frame `i` of every row. Strained: blush, a drop on each temple,
-        steam and a load gauge. Overheated: hotter blush, more steam, trembling, gauge blinking red."""
+        """Heavy-load cues added to frame `i` of every row. Strained: blush, a drop on each temple
+        and a load gauge. Overheated: hotter blush, dizzy eyes, gauge blinking red."""
         if self.condition == 'fine': return
         hot = self.condition == 'overheated'
         xo = getattr(self, 'last_x_off', 0)
@@ -201,15 +196,7 @@ class Body:
         for x in (x0 - 1, x0 + W):
             y = OY + 3 + i % 2
             f.put(x, y, 'd'); f.put(x, y + 1, 'd')
-        # steam rising from the head
-        puffs = [(cx - 3, 0), (cx + 2, 1)] + ([(cx, 2)] if hot else [])
-        for (x, k) in puffs:
-            y = OY - 2 - (i + k) % 3
-            f.put(x, y, 'B'); f.put(x + 1, y, 'B')
-        if hot and i % 4 == 3: f.blit([".BBB.", "BBBBB"], cx - 2, OY - 7)
-        # trembling: shake the whole body on odd frames
-        if hot and i % 2 == 1: f.shift(1)
-        # load gauge above the head (does not shake)
+        # load gauge above the head
         gx, gy = cx - 3, OY - 10
         f.blit(["ooooooo", "o.....o", "ooooooo"], gx, gy)
         if hot:
