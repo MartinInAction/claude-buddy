@@ -63,7 +63,7 @@ Events carry `agent_id`, so tool calls made *inside* a subagent animate that clo
 `.jsonl` (or the subagent's file under `<session>/subagents/`) and takes the latest assistant turn's
 input + cache tokens as the context in use. The sheet has four body widths; the character steps up one
 size for every 25 % of the window used, and the label shows the count, e.g. `shack-products · 115k`.
-Past 50 % the character flushes and shows a load gauge above its head; past 75 % it is dizzy with a heavy dumbbell wobbling over its head.
+Past 50 % a heavy dumbbell wobbles over the character's head; past 75 % it is also sweating, flushed and dizzy.
 The window size (200k or 1M) is a toggle in the menu bar.
 Multiple concurrent Claude sessions each get their own character (labelled with the project folder).
 

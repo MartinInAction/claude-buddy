@@ -4,8 +4,7 @@
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
 Rows come in FAT_LEVELS blocks of 16: block 0 is the normal body, each further block is a wider one
-(used as the agent's context window fills up; level 2 is strained: blush, temple drops and a load gauge,
-level 3 overheated: dizzy eyes, a heavy dumbbell over the head).
+(used as the agent's context window fills up; level 2 is strained: a heavy dumbbell over the head, level 3 overheated: dumbbell, sweat, blush and dizzy eyes).
 Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
   0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
   11 coffee  12 dance  13 stretch  14 juggle  15 think
@@ -182,28 +181,23 @@ class Body:
         self.last_x_off = x_off
 
     def load_overlay(self, f, i):
-        """Heavy-load cues added to frame `i` of every row. Strained: blush, a drop on each temple
-        and a load gauge. Overheated: hotter blush, dizzy eyes, a heavy dumbbell wobbling over the head."""
+        """Heavy-load cues added to frame `i` of every row. Strained: a heavy dumbbell over the head.
+        Overheated: the dumbbell plus blush, a drop on each temple and dizzy eyes (see draw())."""
         if self.condition == 'fine': return
         hot = self.condition == 'overheated'
         xo = getattr(self, 'last_x_off', 0)
         x0, W = self.ox + xo, self.W
         cx = x0 + W // 2
+        # a heavy dumbbell wobbling above the head
+        bell = ["RR.....RR", "RRrrrrrRR", "RR.....RR"]
+        f.blit(bell, cx - 4, OY - 8 + (0, 1)[i % 2])
+        if not hot: return
         # flushed cheeks, just outside the eyes
-        for x in (x0 + 3, x0 + W - 4): f.put(x, OY + 5, 'F' if hot else 'f')
+        for x in (x0 + 3, x0 + W - 4): f.put(x, OY + 5, 'F')
         # one drop on each temple, bobbing
         for x in (x0 - 1, x0 + W):
             y = OY + 3 + i % 2
             f.put(x, y, 'd'); f.put(x, y + 1, 'd')
-        if hot:
-            # a heavy dumbbell wobbling above the head
-            bell = ["RR.....RR", "RRrrrrrRR", "RR.....RR"]
-            f.blit(bell, cx - 4, OY - 8 + (0, 1)[i % 2])
-        else:
-            # load gauge above the head
-            gx, gy = cx - 3, OY - 10
-            f.blit(["ooooooo", "o.....o", "ooooooo"], gx, gy)
-            for k in range(4): f.put(gx + 1 + k, gy + 1, 'G' if k == 3 else 'y')
 
     def book(self, f, flip):
         art = ["obbbbbbbbo", "oBBBBoBBBo", "oBBBBoBBBo", "oBBBBoBBBo", "oooooooooo"] if not flip else \
