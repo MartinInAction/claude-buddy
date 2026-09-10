@@ -79,7 +79,9 @@ struct FamilyView: View {
         let members = [family.main] + family.subs
         let rows = stride(from: 0, to: members.count, by: Self.perRow).map { Array(members[$0..<min($0 + Self.perRow, members.count)]) }
         VStack(spacing: 4) {
-            Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: Cell.width - 8)
+            // Never wider than the characters below it: a long project name gets an ellipsis.
+            let titleWidth = members.count > 1 ? Cell.character * 2 + 4 : Cell.character
+            Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: titleWidth)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .bottom, spacing: 4) {
                     ForEach(row) { member in
