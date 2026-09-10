@@ -316,18 +316,17 @@ final class SessionModel {
     }
 }
 
-/// Pretend BTC miner. Runs only while no session exists. The wallet (`total`) and the best single idle
-/// stretch (`best`, the high score) are saved in UserDefaults, so they survive sessions and app restarts.
+/// Pretend BTC miner. Runs only while no session exists. The wallet (`total`) is saved in UserDefaults,
+/// so it survives sessions and app restarts.
 @Observable
 @MainActor
 final class Miner {
     /// Fake hash rate: one satoshi per second of idling.
     static let ratePerSecond = 0.00000001
-    private static let bestKey = "Miner.best", totalKey = "Miner.total"
+    private static let totalKey = "Miner.total"
 
     private(set) var idleSince: Date?
     private(set) var current = 0.0
-    private(set) var best = UserDefaults.standard.double(forKey: bestKey)
     private(set) var total = UserDefaults.standard.double(forKey: totalKey)
     private var lastTick: Date?
 
@@ -346,7 +345,6 @@ final class Miner {
         let mined = dt * Self.ratePerSecond
         current += mined
         total += mined
-        if current > best { best = current; UserDefaults.standard.set(best, forKey: Self.bestKey) }
         UserDefaults.standard.set(total, forKey: Self.totalKey)
     }
 

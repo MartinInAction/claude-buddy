@@ -200,7 +200,7 @@ struct CharacterView: View {
 }
 
 /// Shown under the sprite while no session exists: the wallet (all BTC ever mined, kept across sessions and
-/// app restarts), how long this idle stretch has lasted, and the best single stretch (high score).
+/// app restarts) and how long this idle stretch has lasted.
 struct MiningScore: View {
     let miner: Miner
     let date: Date
@@ -216,7 +216,6 @@ struct MiningScore: View {
             .padding(.horizontal, 5).padding(.vertical, 1.5)
             .background(.regularMaterial, in: Capsule())
             Pill(text: "mining · \(Miner.duration(miner.idleSeconds)) idle", weight: .regular, maxWidth: 170, dim: true)
-            Pill(text: "best streak \(Miner.format(miner.best))", size: 6.5, weight: .regular, maxWidth: 170, dim: true)
         }
     }
 }

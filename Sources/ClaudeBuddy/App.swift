@@ -12,7 +12,6 @@ struct ClaudeBuddyApp: App {
             Text("\(model.eventCount) events · \(model.agents.count) characters").font(.caption2).foregroundStyle(.secondary)
             Divider()
             Text("₿ \(Miner.format(model.miner.total)) mined" + (model.miner.isMining ? " · mining now" : "")).font(.caption)
-            Text("best streak ₿ \(Miner.format(model.miner.best))").font(.caption2).foregroundStyle(.secondary)
             Divider()
             Button(delegate.panelVisible ? "Hide Buddy" : "Show Buddy") { delegate.toggle() }
                 .keyboardShortcut("b")
