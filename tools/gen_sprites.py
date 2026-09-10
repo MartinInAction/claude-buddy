@@ -5,7 +5,7 @@ Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png 
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
 Rows come in FAT_LEVELS blocks of 16: block 0 is the normal body, each further block is a wider one
 (used as the agent's context window fills up; level 2 is strained: blush, temple drops and a load gauge,
-level 3 overheated: dizzy eyes, warning triangle).
+level 3 overheated: dizzy eyes, a heavy dumbbell over the head).
 Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
   0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
   11 coffee  12 dance  13 stretch  14 juggle  15 think
@@ -178,13 +178,12 @@ class Body:
         elif arms == 'forward': self.arms_forward(f, y, 12)
         elif arms == 'out': self.arms_out(f, y)
         elif arms == 'eat': self.arms_eat(f, y)
-        elif arms == 'chin': self.arms_down(f, y); self.arm_chin(f, y)
         self.ox -= x_off
         self.last_x_off = x_off
 
     def load_overlay(self, f, i):
         """Heavy-load cues added to frame `i` of every row. Strained: blush, a drop on each temple
-        and a load gauge. Overheated: hotter blush, dizzy eyes, a pulsing warning triangle."""
+        and a load gauge. Overheated: hotter blush, dizzy eyes, a heavy dumbbell wobbling over the head."""
         if self.condition == 'fine': return
         hot = self.condition == 'overheated'
         xo = getattr(self, 'last_x_off', 0)
@@ -197,10 +196,9 @@ class Body:
             y = OY + 3 + i % 2
             f.put(x, y, 'd'); f.put(x, y + 1, 'd')
         if hot:
-            # warning triangle above the head, pulsing yellow / orange
-            c = 'y' if i % 2 == 0 else 'G'
-            tri = ["...c...", "..ccc..", "..cec..", ".ccecc.", ".ccccc.", "cccescc"[:3] + "e" + "ccc", "ccccccc"]
-            f.blit([row.replace('c', c) for row in tri], cx - 3, OY - 9)
+            # a heavy dumbbell wobbling above the head
+            bell = ["RR.....RR", "RRrrrrrRR", "RR.....RR"]
+            f.blit(bell, cx - 4, OY - 8 + (0, 1)[i % 2])
         else:
             # load gauge above the head
             gx, gy = cx - 3, OY - 10
@@ -245,21 +243,10 @@ class Body:
             r = max(k for k, n in enumerate(lines) if n)
             f.put(mx + 1 + lines[r], my + 1 + r, 'B')          # blinking cursor
 
-    def arm_chin(self, f, y):
-        """Right arm bent up, hand resting on the chin."""
-        col, outer = self.R(), self.R() + 1
-        for j in range(8, 13): f.put(col, y + j, 'h'); f.put(outer, y + j, 'o')
-        f.put(col, y + 13, 'o'); f.put(outer, y + 13, 'o')
-        f.put(col, y + 7, 's'); f.put(col - 1, y + 7, 's'); f.put(outer, y + 7, 'o')
-        f.put(col, y + 6, 'o'); f.put(col - 1, y + 6, 'o')
-
-    def thought(self, f, phase):
-        """Thought dots rising from the head, then a little cloud."""
-        x = self.ox + self.W
-        dots = [(x, OY), (x + 1, OY - 2), (x + 2, OY - 4)]
-        for k in range(min(phase + 1, 3)): f.put(*dots[k], 'z')
-        if phase >= 3:
-            f.blit([".zzz.", "zzzzz", ".zzz."], x + 2, OY - 8)
+    def question(self, f, phase):
+        """A question mark floating next to the head (clear of the load gauge), bobbing up and down."""
+        art = [".yyy.", "y...y", "....y", "...y.", "..y..", ".....", "..y.."]
+        f.blit(art, self.ox + self.W + 1, OY - 5 + (0, -1, 0, 1)[phase % 4])
 
     def sweat(self, f, phase, side=+1):
         x, y = (self.ox + self.W - 1 if side > 0 else self.ox), OY + 3 + phase
@@ -398,7 +385,7 @@ def make_block(extra, condition='fine'):
     rows.append(balls)                                                                                    # juggle
     think = []
     for ph in range(4):
-        x = fr(head='blink' if ph == 3 else 'open', arms='chin'); b.thought(x, ph); think.append(x)
+        x = fr(head='blink' if ph == 3 else 'open'); b.question(x, ph); think.append(x)
     rows.append(think)                                                                                    # think
     for row in rows:
         for i, f in enumerate(row): b.load_overlay(f, i)

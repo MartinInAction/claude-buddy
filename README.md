@@ -40,7 +40,7 @@ position is remembered.
 | Hook event | Pose |
 |---|---|
 | `SessionStart` | sparkles, "hej!" |
-| `UserPromptSubmit`, and after every `PostToolUse` until the next tool | hand on chin, thought bubble, "pondering…" |
+| `UserPromptSubmit`, and after every `PostToolUse` until the next tool | question mark over the head, "pondering…" |
 | `PreToolUse` Read / Grep / Glob / WebFetch | reading a book |
 | `PreToolUse` Edit / Write | sits down at a desk and types, code appearing on the monitor |
 | `PreToolUse` Bash | terminal window |
@@ -63,7 +63,7 @@ Events carry `agent_id`, so tool calls made *inside* a subagent animate that clo
 `.jsonl` (or the subagent's file under `<session>/subagents/`) and takes the latest assistant turn's
 input + cache tokens as the context in use. The sheet has four body widths; the character steps up one
 size for every 25 % of the window used, and the label shows the count, e.g. `shack-products · 115k`.
-Past 50 % the character flushes and shows a load gauge above its head; past 75 % it is dizzy and a warning triangle pulses over its head.
+Past 50 % the character flushes and shows a load gauge above its head; past 75 % it is dizzy with a heavy dumbbell wobbling over its head.
 The window size (200k or 1M) is a toggle in the menu bar.
 Multiple concurrent Claude sessions each get their own character (labelled with the project folder).
 
