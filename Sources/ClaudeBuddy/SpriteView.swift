@@ -21,7 +21,15 @@ struct Family: Identifiable {
     }
 }
 
-/// All sessions, wrapping onto new lines when the strip gets too wide.
+/// Fixed cell sizes so nothing shifts when labels, bubbles or poses change.
+enum Cell {
+    static let columns = 2            // sessions per row
+    static let width: CGFloat = 236   // one session
+    static let character: CGFloat = 112   // one character column inside a session
+    static let spacing: CGFloat = 6
+}
+
+/// All sessions in a fixed grid, `Cell.columns` per row, bottom-aligned.
 struct BuddyStrip: View {
     var model: SessionModel
     var onSizeChange: (CGSize) -> Void
@@ -29,13 +37,22 @@ struct BuddyStrip: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
             let families = Family.group(model.agents)
-            FlowLayout(spacing: 6, maxWidth: 440) {
+            let rows = stride(from: 0, to: families.count, by: Cell.columns).map { Array(families[$0..<min($0 + Cell.columns, families.count)]) }
+            Group {
                 if families.isEmpty {
                     CharacterView(agent: nil, date: ctx.date, miner: model.miner)
+                        .frame(width: Cell.character)
                 } else {
-                    ForEach(families) { family in
-                        FamilyView(family: family, date: ctx.date)
-                            .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
+                    Grid(alignment: .bottom, horizontalSpacing: Cell.spacing, verticalSpacing: Cell.spacing) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                            GridRow(alignment: .bottom) {
+                                ForEach(row) { family in
+                                    FamilyView(family: family, date: ctx.date)
+                                        .frame(width: Cell.width, alignment: .bottom)
+                                        .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -62,63 +79,20 @@ struct FamilyView: View {
         let members = [family.main] + family.subs
         let rows = stride(from: 0, to: members.count, by: Self.perRow).map { Array(members[$0..<min($0 + Self.perRow, members.count)]) }
         VStack(spacing: 4) {
-            Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: 260)
+            Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: Cell.width - 8)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .bottom, spacing: 4) {
                     ForEach(row) { member in
                         CharacterView(agent: member, date: date)
+                            .frame(width: Cell.character, alignment: .bottom)
                             .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
                     }
+                    // Keep a lone character in the left column instead of centring it.
+                    if row.count < Self.perRow { Spacer().frame(width: Cell.character) }
                 }
             }
         }
         .padding(.horizontal, 4)
-    }
-}
-
-/// Left-to-right flow that wraps at `maxWidth`, bottom-aligning items within a row.
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 6
-    var maxWidth: CGFloat = 440
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        arrange(subviews).size
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let result = arrange(subviews)
-        for (i, origin) in result.origins.enumerated() {
-            subviews[i].place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
-                              anchor: .topLeading, proposal: .unspecified)
-        }
-    }
-
-    private func arrange(_ subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        var rows: [[Int]] = [[]]
-        var rowWidth: CGFloat = 0
-        for (i, sz) in sizes.enumerated() {
-            let needed = rowWidth == 0 ? sz.width : rowWidth + spacing + sz.width
-            if needed > maxWidth, !rows[rows.count - 1].isEmpty {
-                rows.append([i]); rowWidth = sz.width
-            } else {
-                rows[rows.count - 1].append(i); rowWidth = needed
-            }
-        }
-        var origins = Array(repeating: CGPoint.zero, count: sizes.count)
-        var y: CGFloat = 0
-        var totalWidth: CGFloat = 0
-        for row in rows {
-            let rowHeight = row.map { sizes[$0].height }.max() ?? 0
-            var x: CGFloat = 0
-            for i in row {
-                origins[i] = CGPoint(x: x, y: y + rowHeight - sizes[i].height)   // bottom-align
-                x += sizes[i].width + spacing
-            }
-            totalWidth = max(totalWidth, x - spacing)
-            y += rowHeight + spacing
-        }
-        return (CGSize(width: max(totalWidth, 0), height: max(y - spacing, 0)), origins)
     }
 }
 
@@ -205,8 +179,8 @@ struct CharacterView: View {
         let name = agent == nil ? "no session" : ((agent?.isSubagent ?? false) ? (agent?.label ?? "agent") : "main")
         let doing = activityText
         VStack(spacing: 1) {
-            Pill(text: name + contextSuffix(agent), maxWidth: 170)
-            Pill(text: doing, weight: .regular, maxWidth: 170, dim: true)
+            Pill(text: name + contextSuffix(agent), maxWidth: Cell.character)
+            Pill(text: doing, weight: .regular, maxWidth: Cell.character, dim: true)
         }
     }
 }
@@ -215,7 +189,7 @@ struct CharacterView: View {
 struct SpeechBubble: View {
     let text: String
     let date: Date
-    var maxWidth: CGFloat = 150
+    var maxWidth: CGFloat = Cell.character + 24
 
     private var bob: CGFloat {
         CGFloat(sin(date.timeIntervalSinceReferenceDate * 2 * .pi / 1.2) * 1.5)
@@ -269,7 +243,7 @@ struct MiningScore: View {
             .lineLimit(1)
             .padding(.horizontal, 5).padding(.vertical, 1.5)
             .background(.regularMaterial, in: Capsule())
-            Pill(text: "mining · \(Miner.duration(miner.idleSeconds)) idle", weight: .regular, maxWidth: 170, dim: true)
+            Pill(text: "mining · \(Miner.duration(miner.idleSeconds)) idle", weight: .regular, maxWidth: Cell.character, dim: true)
         }
     }
 }
