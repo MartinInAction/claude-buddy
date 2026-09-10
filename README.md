@@ -52,6 +52,7 @@ position is remembered.
 | context grew since last check | eating a cookie, "nom nom · +12k" |
 | 60 s without events | sleeping |
 | `SessionEnd` | waves, disappears |
+| no session at all | mines fake BTC with a pickaxe; the wallet, idle time and best streak show below |
 
 Events carry `agent_id`, so tool calls made *inside* a subagent animate that clone, not the main character.
 

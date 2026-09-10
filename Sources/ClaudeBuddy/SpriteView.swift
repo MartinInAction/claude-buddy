@@ -31,7 +31,7 @@ struct BuddyStrip: View {
             let families = Family.group(model.agents)
             FlowLayout(spacing: 6, maxWidth: 440) {
                 if families.isEmpty {
-                    CharacterView(agent: nil, date: ctx.date)
+                    CharacterView(agent: nil, date: ctx.date, miner: model.miner)
                 } else {
                     ForEach(families) { family in
                         FamilyView(family: family, date: ctx.date)
@@ -149,9 +149,10 @@ struct Pill: View {
 struct CharacterView: View {
     let agent: Agent?
     let date: Date
+    var miner: Miner? = nil
 
     private var scale: CGFloat { (agent?.isSubagent ?? false) ? 1.5 : 2 }
-    private var pose: Pose { agent?.pose ?? .sleep }
+    private var pose: Pose { agent?.pose ?? .mine }
 
     var body: some View {
         VStack(spacing: 1) {
@@ -162,7 +163,7 @@ struct CharacterView: View {
     }
 
     private var frameIndex: Int {
-        let t = date.timeIntervalSince(agent?.poseStarted ?? .distantPast)
+        let t = date.timeIntervalSince(agent?.poseStarted ?? miner?.idleSince ?? .distantPast)
         return Int(t * pose.fps) % pose.frameCount
     }
 
@@ -181,11 +182,58 @@ struct CharacterView: View {
 
     /// Who this is and what it is doing right now, under the sprite.
     @ViewBuilder private var description: some View {
+        if agent == nil, let miner {
+            MiningScore(miner: miner, date: date)
+        } else {
+            agentDescription
+        }
+    }
+
+    @ViewBuilder private var agentDescription: some View {
         let name = agent == nil ? "no session" : ((agent?.isSubagent ?? false) ? (agent?.label ?? "agent") : "main")
         let doing = agent == nil ? "waiting for Claude Code" : (agent?.bubble ?? (agent?.pose == .sleep ? "sleeping" : "idle"))
         VStack(spacing: 1) {
             Pill(text: name + contextSuffix(agent), maxWidth: 170)
             Pill(text: doing, weight: .regular, maxWidth: 170, dim: true)
         }
+    }
+}
+
+/// Shown under the sprite while no session exists: the wallet (all BTC ever mined, kept across sessions and
+/// app restarts), how long this idle stretch has lasted, and the best single stretch (high score).
+struct MiningScore: View {
+    let miner: Miner
+    let date: Date
+
+    var body: some View {
+        VStack(spacing: 1) {
+            HStack(spacing: 3) {
+                BitcoinLogo(size: 9)
+                Text(Miner.format(miner.total))
+                    .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
+            }
+            .lineLimit(1)
+            .padding(.horizontal, 5).padding(.vertical, 1.5)
+            .background(.regularMaterial, in: Capsule())
+            Pill(text: "mining · \(Miner.duration(miner.idleSeconds)) idle", weight: .regular, maxWidth: 170, dim: true)
+            Pill(text: "best streak \(Miner.format(miner.best))", size: 6.5, weight: .regular, maxWidth: 170, dim: true)
+        }
+    }
+}
+
+/// Tiny orange coin with the ₿ mark.
+struct BitcoinLogo: View {
+    var size: CGFloat = 10
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color(red: 0.97, green: 0.58, blue: 0.10))
+            Text("₿")
+                .font(.system(size: size * 0.78, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .rotationEffect(.degrees(14))
+                .offset(y: -size * 0.02)
+        }
+        .frame(width: size, height: size)
     }
 }

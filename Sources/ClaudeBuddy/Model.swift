@@ -3,12 +3,12 @@ import Observation
 
 /// One animation row in the sprite sheet. Row order must match tools/gen_sprites.py.
 enum Pose: Int, CaseIterable {
-    case idle = 0, read, type, run, wait, sleep, oops, wave, spawn, eat
+    case idle = 0, read, type, run, wait, sleep, oops, wave, spawn, eat, mine
 
     var row: Int { rawValue }
     var frameCount: Int {
         switch self {
-        case .idle: return 4
+        case .idle, .mine: return 4
         case .eat: return 3
         default: return 2
         }
@@ -17,7 +17,7 @@ enum Pose: Int, CaseIterable {
         switch self {
         case .idle: return 1.5
         case .sleep: return 1
-        case .type, .run: return 6
+        case .type, .run, .mine: return 6
         default: return 3
         }
     }
@@ -122,6 +122,8 @@ final class SessionModel {
     private(set) var agents: [Agent] = []
     var lastEventDescription = "Waiting for Claude Code…"
     var eventCount = 0
+    /// Fake bitcoin mining that runs whenever no session is around: a way to see how long Claude has been idle.
+    let miner = Miner()
 
     private var timer: Timer?
     private var nextTint = 1
@@ -270,7 +272,7 @@ final class SessionModel {
             case .idle:
                 if sinceEvent > 8 { a.bubble = nil }
                 if sinceEvent > 60 { a.pose = .sleep; a.poseStarted = now }
-            case .sleep, .wait:
+            case .sleep, .wait, .mine:
                 break
             }
             // A subagent that has been quiet for a long time is gone (SubagentStop may have been missed).
@@ -279,6 +281,7 @@ final class SessionModel {
             if !a.isSubagent && sinceEvent > 2 * 60 * 60 { remove.append(a.id) }
         }
         if !remove.isEmpty { agents.removeAll { remove.contains($0.id) } }
+        miner.tick(idle: agents.isEmpty, now: now)
     }
 
     func clear() { agents.removeAll() }
@@ -310,5 +313,49 @@ final class SessionModel {
                 if let e = ev(dict) { self?.handle(e) }
             }
         }
+    }
+}
+
+/// Pretend BTC miner. Runs only while no session exists. The wallet (`total`) and the best single idle
+/// stretch (`best`, the high score) are saved in UserDefaults, so they survive sessions and app restarts.
+@Observable
+@MainActor
+final class Miner {
+    /// Fake hash rate: one satoshi per second of idling.
+    static let ratePerSecond = 0.00000001
+    private static let bestKey = "Miner.best", totalKey = "Miner.total"
+
+    private(set) var idleSince: Date?
+    private(set) var current = 0.0
+    private(set) var best = UserDefaults.standard.double(forKey: bestKey)
+    private(set) var total = UserDefaults.standard.double(forKey: totalKey)
+    private var lastTick: Date?
+
+    var isMining: Bool { idleSince != nil }
+    var idleSeconds: TimeInterval { idleSince.map { Date().timeIntervalSince($0) } ?? 0 }
+
+    func tick(idle: Bool, now: Date) {
+        guard idle else {
+            if idleSince != nil { idleSince = nil; lastTick = nil; current = 0 }
+            return
+        }
+        if idleSince == nil { idleSince = now; current = 0 }
+        let dt = lastTick.map { now.timeIntervalSince($0) } ?? 0
+        lastTick = now
+        guard dt > 0 else { return }
+        let mined = dt * Self.ratePerSecond
+        current += mined
+        total += mined
+        if current > best { best = current; UserDefaults.standard.set(best, forKey: Self.bestKey) }
+        UserDefaults.standard.set(total, forKey: Self.totalKey)
+    }
+
+    static func format(_ btc: Double) -> String { String(format: "%.8f", btc) }
+
+    static func duration(_ s: TimeInterval) -> String {
+        let t = Int(s)
+        if t >= 3600 { return "\(t / 3600)h \(t % 3600 / 60)m" }
+        if t >= 60 { return "\(t / 60)m \(t % 60)s" }
+        return "\(t)s"
     }
 }

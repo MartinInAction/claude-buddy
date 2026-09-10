@@ -3,10 +3,10 @@
 
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
-Rows come in FAT_LEVELS blocks of 10: block 0 is the normal body, each further block is a wider one
+Rows come in FAT_LEVELS blocks of 11: block 0 is the normal body, each further block is a wider one
 (used as the agent's context window fills up). Within a block the row order must match
 `Pose` in Sources/ClaudeBuddy/Model.swift:
-  0 idle  1 read  2 type  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat
+  0 idle  1 read  2 type  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
 Replace these PNGs with your own art as long as you keep the same grid.
 """
 import struct, zlib, os, sys
@@ -39,6 +39,11 @@ BASE = {
     'z': rgb('94a3b8'),   # zzz
     'c': rgb('c98b4b'),   # cookie
     'C': rgb('5a3a1a'),   # chocolate chips
+    'r': rgb('8b8f99'),   # rock
+    'R': rgb('5b5f69'),   # rock shadow
+    'x': rgb('8a5a2b'),   # pickaxe handle
+    'X': rgb('cbd5e1'),   # pickaxe head
+    'G': rgb('f7931a'),   # bitcoin nugget
 }
 TINTS = [
     ('e8734a', 'c4552f'),  # 0 main: coral
@@ -188,6 +193,27 @@ class Body:
         for i in range(self.L()+1, self.ox + self.W // 2 - 1): f.put(i, y+7, 's'); f.put(i, y+6, 'o'); f.put(i, y+8, 'o')
         for i in range(self.ox + self.W // 2 + 4, self.R()): f.put(i, y+7, 's'); f.put(i, y+6, 'o'); f.put(i, y+8, 'o')
 
+    def pickaxe(self, f, raised, sparks=False, nugget=False):
+        """Old-school mining: both hands on a pickaxe, swinging at a rock on the right."""
+        y = OY
+        R = self.R()
+        # rock on the ground to the right of the character
+        rock = ["...rrr...", "..rrrrr..", ".rrrRrrr.", "rrRRrrRRr", "rRrrrrrRr"]
+        if nugget: rock = ["...rrr...", "..rrGrr..", ".rrrRGrr.", "rrRRrrRRr", "rRrrrrrRr"]
+        f.blit(rock, R + 1, y + 15)
+        if raised:
+            # handle rises up-right from the hands, pick head at the top
+            for (dx, dy) in [(1, 11), (2, 10), (3, 9), (4, 8), (5, 7)]: f.put(R + dx, y + dy, 'x')
+            for dx in range(4, 9): f.put(R + dx, y + 6, 'X')
+            f.put(R + 4, y + 7, 'X'); f.put(R + 8, y + 7, 'X')
+        else:
+            # handle slams down-right, pick head buried in the rock
+            for (dx, dy) in [(1, 11), (2, 12), (3, 13), (4, 14)]: f.put(R + dx, y + dy, 'x')
+            for dx in range(3, 8): f.put(R + dx, y + 15, 'X')
+            f.put(R + 3, y + 14, 'X'); f.put(R + 7, y + 14, 'X')
+            if sparks:
+                for (dx, dy) in [(2, 13), (8, 12), (9, 14), (1, 14)]: f.put(R + dx, y + dy, 'y')
+
     def zzz(self, f, phase):
         x, y = self.ox + self.W, OY - 1 - phase
         for (dx, dy) in [(0,0),(1,0),(2,0),(1,1),(0,2),(1,2),(2,2)]: f.put(x+dx, y+dy, 'z')
@@ -219,6 +245,11 @@ def make_block(extra):
     c = fr(head='blink', arms='eat'); b.cookie(c, True)
     d = fr(head='happy', y_off=1, arms='eat'); b.cookie(d, True)
     rows.append([a, c, d])                                                                                # eat
+    a = fr(head='down', arms='forward'); b.pickaxe(a, True)
+    c = fr(head='down', arms='forward'); b.pickaxe(c, True)
+    d = fr(head='down', y_off=1, arms='forward'); b.pickaxe(d, False, sparks=True)
+    e = fr(head='happy', y_off=1, arms='forward'); b.pickaxe(e, False, nugget=True)
+    rows.append([a, c, d, e])                                                                             # mine
     return rows
 
 def make_frames():
