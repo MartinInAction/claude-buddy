@@ -1,18 +1,40 @@
 import SwiftUI
 
-/// The whole strip of characters. Re-renders ~8x per second via TimelineView.
+/// One session: the main character with its subagents clustered on both sides.
+struct Family: Identifiable {
+    let main: Agent
+    let subs: [Agent]
+    var id: String { main.id }
+
+    static func group(_ agents: [Agent]) -> [Family] {
+        var order: [String] = []
+        var bySession: [String: [Agent]] = [:]
+        for a in agents {
+            if bySession[a.sessionID] == nil { order.append(a.sessionID) }
+            bySession[a.sessionID, default: []].append(a)
+        }
+        return order.compactMap { sid in
+            let members = bySession[sid] ?? []
+            guard let main = members.first(where: { !$0.isSubagent }) ?? members.first else { return nil }
+            return Family(main: main, subs: members.filter { $0.id != main.id })
+        }
+    }
+}
+
+/// All sessions, wrapping onto new lines when the strip gets too wide.
 struct BuddyStrip: View {
     var model: SessionModel
     var onSizeChange: (CGSize) -> Void
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1.0 / 8.0)) { ctx in
-            HStack(alignment: .bottom, spacing: 4) {
-                if model.agents.isEmpty {
+            let families = Family.group(model.agents)
+            FlowLayout(spacing: 6, maxWidth: 440) {
+                if families.isEmpty {
                     CharacterView(agent: nil, date: ctx.date)
                 } else {
-                    ForEach(model.agents) { agent in
-                        CharacterView(agent: agent, date: ctx.date)
+                    ForEach(families) { family in
+                        FamilyView(family: family, date: ctx.date)
                             .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
                     }
                 }
@@ -27,6 +49,98 @@ struct BuddyStrip: View {
                 .onAppear { onSizeChange(geo.size) }
                 .onChange(of: geo.size) { _, new in onSizeChange(new) }
         })
+    }
+}
+
+/// Main character in the middle; subagents alternate left/right, stacked two per column,
+/// newest nearest the main character.
+struct FamilyView: View {
+    let family: Family
+    let date: Date
+
+    private var sides: (left: [Agent], right: [Agent]) {
+        var l: [Agent] = [], r: [Agent] = []
+        for (i, a) in family.subs.enumerated() { if i % 2 == 0 { r.append(a) } else { l.append(a) } }
+        return (l, r)
+    }
+
+    var body: some View {
+        let (left, right) = sides
+        HStack(alignment: .bottom, spacing: 2) {
+            columns(left, mirrored: true)
+            CharacterView(agent: family.main, date: date)
+            columns(right, mirrored: false)
+        }
+        .padding(.horizontal, family.subs.isEmpty ? 0 : 6)
+        .padding(.top, family.subs.isEmpty ? 0 : 4)
+        .background {
+            if !family.subs.isEmpty {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.regularMaterial)
+                    .opacity(0.3)
+            }
+        }
+    }
+
+    /// Chunks of two subagents stacked vertically; the first chunk sits next to the main character.
+    @ViewBuilder private func columns(_ subs: [Agent], mirrored: Bool) -> some View {
+        let chunks = stride(from: 0, to: subs.count, by: 2).map { Array(subs[$0..<min($0 + 2, subs.count)]) }
+        HStack(alignment: .bottom, spacing: 2) {
+            ForEach(Array((mirrored ? chunks.reversed() : chunks).enumerated()), id: \.offset) { _, chunk in
+                VStack(spacing: 0) {
+                    ForEach(chunk) { sub in
+                        CharacterView(agent: sub, date: date)
+                            .transition(.scale(scale: 0.2, anchor: .bottom).combined(with: .opacity))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Left-to-right flow that wraps at `maxWidth`, bottom-aligning items within a row.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var maxWidth: CGFloat = 440
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(subviews)
+        for (i, origin) in result.origins.enumerated() {
+            subviews[i].place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                              anchor: .topLeading, proposal: .unspecified)
+        }
+    }
+
+    private func arrange(_ subviews: Subviews) -> (size: CGSize, origins: [CGPoint]) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        var rows: [[Int]] = [[]]
+        var rowWidth: CGFloat = 0
+        for (i, sz) in sizes.enumerated() {
+            let needed = rowWidth == 0 ? sz.width : rowWidth + spacing + sz.width
+            if needed > maxWidth, !rows[rows.count - 1].isEmpty {
+                rows.append([i]); rowWidth = sz.width
+            } else {
+                rows[rows.count - 1].append(i); rowWidth = needed
+            }
+        }
+        var origins = Array(repeating: CGPoint.zero, count: sizes.count)
+        var y: CGFloat = 0
+        var totalWidth: CGFloat = 0
+        for row in rows {
+            let rowHeight = row.map { sizes[$0].height }.max() ?? 0
+            var x: CGFloat = 0
+            for i in row {
+                origins[i] = CGPoint(x: x, y: y + rowHeight - sizes[i].height)   // bottom-align
+                x += sizes[i].width + spacing
+            }
+            totalWidth = max(totalWidth, x - spacing)
+            y += rowHeight + spacing
+        }
+        return (CGSize(width: max(totalWidth, 0), height: max(y - spacing, 0)), origins)
     }
 }
 
