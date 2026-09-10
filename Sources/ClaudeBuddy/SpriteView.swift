@@ -134,14 +134,17 @@ struct Pill: View {
     var design: Font.Design = .monospaced
     var maxWidth: CGFloat = 140
     var dim = false
+    var lines = 1
 
     var body: some View {
         Text(text)
             .font(.system(size: size, weight: weight, design: design))
             .foregroundStyle(dim ? .secondary : .primary)
-            .lineLimit(1)
+            .lineLimit(lines)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 5).padding(.vertical, 1.5)
-            .background(.regularMaterial, in: Capsule())
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: lines > 1 ? 6 : 20))
             .frame(maxWidth: maxWidth)
     }
 }
@@ -206,7 +209,7 @@ struct CharacterView: View {
         let doing = activityText
         VStack(spacing: 1) {
             Pill(text: name + contextSuffix(agent), maxWidth: Cell.character)
-            Pill(text: doing, weight: .regular, maxWidth: Cell.character, dim: true)
+            Pill(text: doing, weight: .regular, maxWidth: Cell.character, dim: true, lines: 2)
         }
     }
 }

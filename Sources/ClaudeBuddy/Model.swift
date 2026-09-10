@@ -97,7 +97,7 @@ struct BuddyEvent {
         let label = tool.hasPrefix("mcp__") ? tool.split(separator: "_").last.map(String.init) ?? tool : tool
         guard let t = text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return label }
         let firstLine = t.split(separator: "\n").first.map(String.init) ?? t
-        return "\(label) · \(firstLine.count > 26 ? String(firstLine.prefix(25)) + "…" : firstLine)"
+        return "\(label) · \(firstLine.count > 44 ? String(firstLine.prefix(43)) + "…" : firstLine)"
     }
 
     /// The notification message, trimmed to fit a two-line speech bubble.

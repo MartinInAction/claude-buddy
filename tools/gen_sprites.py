@@ -4,7 +4,8 @@
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
 Rows come in FAT_LEVELS blocks of 16: block 0 is the normal body, each further block is a wider one
-(used as the agent's context window fills up; level 2 is sweaty, level 3 dizzy and sweaty).
+(used as the agent's context window fills up; level 2 is strained: blush, steam and a load gauge,
+level 3 overheated: dizzy eyes, trembling, gauge blinking red).
 Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
   0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
   11 coffee  12 dance  13 stretch  14 juggle  15 think
@@ -15,7 +16,7 @@ import struct, zlib, os, sys
 FRAME = 32
 COLS = 4
 FAT_LEVELS = [0, 2, 4, 6]      # extra body width in px per level
-CONDITIONS = ['fine', 'fine', 'sweaty', 'dizzy']   # per fat level: dizzy implies sweaty
+CONDITIONS = ['fine', 'fine', 'strained', 'overheated']   # per fat level, see Body.load_overlay
 
 def rgb(h, a=255):
     h = h.lstrip('#'); return (int(h[0:2],16), int(h[2:4],16), int(h[4:6],16), a)
@@ -48,6 +49,8 @@ BASE = {
     'G': rgb('f7931a'),   # bitcoin nugget
     'M': rgb('6b3e1e'),   # coffee
     'n': rgb('f472b6'),   # music note
+    'f': rgb('e8907a'),   # blush
+    'F': rgb('ef4444'),   # hot red
 }
 TINTS = [
     ('e8734a', 'c4552f'),  # 0 main: coral
@@ -66,6 +69,11 @@ class Frame:
                 if ch != '.': self.put(x+i, y+j, ch)
     def put(self, x, y, ch):
         if 0 <= x < FRAME and 0 <= y < FRAME: self.px[y][x] = ch
+    def shift(self, dx):
+        """Move the whole frame horizontally (used for trembling)."""
+        for y in range(FRAME):
+            row = self.px[y]
+            self.px[y] = ['.'] * dx + row[:FRAME - dx] if dx > 0 else row[-dx:] + ['.'] * -dx
 
 def widen(art, extra):
     """Insert `extra` copies of the middle column so the shape gets fatter but keeps its outline."""
@@ -163,7 +171,7 @@ class Body:
 
     def draw(self, f, head='open', y_off=0, arms='down', x_off=0):
         # Too much context: the character is dizzy (and sweaty) no matter what it is doing.
-        if self.condition == 'dizzy' and head != 'sleep': head = 'dizzy'
+        if self.condition == 'overheated' and head != 'sleep': head = 'dizzy'
         self.ox += x_off
         x, y = self.ox, OY + y_off
         f.blit(self.head[head], x, y)
@@ -179,20 +187,37 @@ class Body:
         self.ox -= x_off
         self.last_x_off = x_off
 
-    def sweat_overlay(self, f, i):
-        """Animated sweat, added to frame `i` of every row: two drops when sweaty, a shower when dizzy."""
+    def load_overlay(self, f, i):
+        """Heavy-load cues added to frame `i` of every row. Strained: blush, a drop on each temple,
+        steam and a load gauge. Overheated: hotter blush, more steam, trembling, gauge blinking red."""
         if self.condition == 'fine': return
+        hot = self.condition == 'overheated'
         xo = getattr(self, 'last_x_off', 0)
-        L, R = self.ox + xo - 1, self.ox + xo + self.W
-        cx = self.ox + xo + self.W // 2
-        drops = [(L, OY + 2, 0), (R, OY + 3, 2)]
-        if self.condition == 'dizzy':
-            drops += [(L - 2, OY + 6, 1), (R + 2, OY + 7, 3), (cx - 3, OY - 3, 2), (cx + 3, OY - 4, 0), (L - 1, OY + 11, 3)]
-        for (x, y0, ph) in drops:
-            y = y0 + (i + ph) % 4          # each drop falls one pixel per frame, then starts over
+        x0, W = self.ox + xo, self.W
+        cx = x0 + W // 2
+        # flushed cheeks, just outside the eyes
+        for x in (x0 + 3, x0 + W - 4): f.put(x, OY + 5, 'F' if hot else 'f')
+        # one drop on each temple, bobbing
+        for x in (x0 - 1, x0 + W):
+            y = OY + 3 + i % 2
             f.put(x, y, 'd'); f.put(x, y + 1, 'd')
+        # steam rising from the head
+        puffs = [(cx - 3, 0), (cx + 2, 1)] + ([(cx, 2)] if hot else [])
+        for (x, k) in puffs:
+            y = OY - 2 - (i + k) % 3
+            f.put(x, y, 'B'); f.put(x + 1, y, 'B')
+        if hot and i % 4 == 3: f.blit([".BBB.", "BBBBB"], cx - 2, OY - 7)
+        # trembling: shake the whole body on odd frames
+        if hot and i % 2 == 1: f.shift(1)
+        # load gauge above the head (does not shake)
+        gx, gy = cx - 3, OY - 10
+        f.blit(["ooooooo", "o.....o", "ooooooo"], gx, gy)
+        if hot:
+            if i % 2 == 0:
+                for k in range(5): f.put(gx + 1 + k, gy + 1, 'F' if k >= 3 else 'G')
+        else:
+            for k in range(4): f.put(gx + 1 + k, gy + 1, 'G' if k == 3 else 'y')
 
-    # props, positioned relative to the body
     def book(self, f, flip):
         art = ["obbbbbbbbo", "oBBBBoBBBo", "oBBBBoBBBo", "oBBBBoBBBo", "oooooooooo"] if not flip else \
               ["obbbbbbbbo", "oBBBoBBBBo", "oBBBoBBBBo", "oBBBoBBBBo", "oooooooooo"]
@@ -387,7 +412,7 @@ def make_block(extra, condition='fine'):
         x = fr(head='blink' if ph == 3 else 'open', arms='chin'); b.thought(x, ph); think.append(x)
     rows.append(think)                                                                                    # think
     for row in rows:
-        for i, f in enumerate(row): b.sweat_overlay(f, i)
+        for i, f in enumerate(row): b.load_overlay(f, i)
     return rows
 
 def make_frames():
