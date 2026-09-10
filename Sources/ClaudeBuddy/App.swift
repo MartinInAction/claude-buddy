@@ -107,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let overPanel = shown && panel.frame.insetBy(dx: -24, dy: -24).contains(mouse)
         let needsInput = SessionModel.shared.agents.contains { $0.needsInput }
         let now = Date()
-        if inCorner || overPanel || needsInput { revealedUntil = now.addingTimeInterval(1.5) }
+        if inCorner || overPanel || needsInput { revealedUntil = now.addingTimeInterval(4) }
         setShown(now < revealedUntil)
     }
 
@@ -116,7 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         shown = on
         panel.ignoresMouseEvents = !on
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = on ? 0.2 : 0.4
+            ctx.duration = on ? 0.2 : 0.8
             panel.animator().alphaValue = on ? 1 : 0
         }
     }
