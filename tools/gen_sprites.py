@@ -177,6 +177,7 @@ class Body:
         elif arms == 'forward': self.arms_forward(f, y, 12)
         elif arms == 'out': self.arms_out(f, y)
         elif arms == 'eat': self.arms_eat(f, y)
+        elif arms == 'think': self.arm_think(f, y)
         self.ox -= x_off
         self.last_x_off = x_off
 
@@ -238,9 +239,24 @@ class Body:
             f.put(mx + 1 + lines[r], my + 1 + r, 'B')          # blinking cursor
 
     def question(self, f, phase):
-        """A question mark floating next to the head (clear of the load gauge), bobbing up and down."""
-        art = [".yyy.", "y...y", "....y", "...y.", "..y..", ".....", "..y.."]
-        f.blit(art, self.ox + self.W + 1, OY - 5 + (0, -1, 0, 1)[phase % 4])
+        """A small question mark floating next to the head (clear of the load gauge), bobbing up and down."""
+        art = ["yy.", "..y", ".y.", "...", ".y."]
+        f.blit(art, self.ox + self.W + 1, OY - 3 + (0, -1, 0, 1)[phase % 4])
+
+    def arm_think(self, f, y):
+        """Right arm bent up so the hand rests on the mouth, the classic pondering pose."""
+        R, cx = self.R(), self.ox + self.W // 2
+        # left arm hangs as usual
+        for j in range(9, 13): f.put(self.L(), y+j, 'h'); f.put(self.L()-1, y+j, 'o')
+        f.put(self.L(), y+13, 's'); f.put(self.L()-1, y+13, 'o'); f.put(self.L(), y+14, 'o'); f.put(self.L()-1, y+9, 'o')
+        # right arm rises along the torso, elbow at the waist
+        for j in range(8, 13): f.put(R, y+j, 'h'); f.put(R+1, y+j, 'o')
+        f.put(R+1, y+7, 'o'); f.put(R, y+13, 'o'); f.put(R+1, y+13, 'o')
+        # forearm along the jaw, hand cupped over the mouth
+        for i in range(cx + 1, R + 1): f.put(i, y+7, 's')
+        for i in range(cx + 1, R): f.put(i, y+8, 'o')
+        f.put(cx + 1, y+6, 's'); f.put(cx + 2, y+6, 's')
+        f.put(cx, y+6, 'o'); f.put(cx, y+7, 'o')
 
     def sweat(self, f, phase, side=+1):
         x, y = (self.ox + self.W - 1 if side > 0 else self.ox), OY + 3 + phase
@@ -379,7 +395,7 @@ def make_block(extra, condition='fine'):
     rows.append(balls)                                                                                    # juggle
     think = []
     for ph in range(4):
-        x = fr(head='blink' if ph == 3 else 'open'); b.question(x, ph); think.append(x)
+        x = fr(head='blink' if ph == 3 else 'open', arms='think'); b.question(x, ph); think.append(x)
     rows.append(think)                                                                                    # think
     for row in rows:
         for i, f in enumerate(row): b.load_overlay(f, i)
