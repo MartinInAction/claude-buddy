@@ -4,12 +4,12 @@ import Observation
 /// One animation row in the sprite sheet. Row order must match tools/gen_sprites.py.
 enum Pose: Int, CaseIterable {
     case idle = 0, read, type, run, wait, sleep, oops, wave, spawn, eat, mine
-    case coffee, dance, stretch, juggle
+    case coffee, dance, stretch, juggle, think
 
     var row: Int { rawValue }
     var frameCount: Int {
         switch self {
-        case .idle, .type, .mine, .coffee, .dance, .juggle: return 4
+        case .idle, .type, .mine, .coffee, .dance, .juggle, .think: return 4
         case .eat, .stretch: return 3
         default: return 2
         }
@@ -18,7 +18,7 @@ enum Pose: Int, CaseIterable {
         switch self {
         case .idle, .stretch: return 1.5
         case .sleep: return 1
-        case .coffee: return 2
+        case .coffee, .think: return 2
         case .dance: return 4
         case .juggle: return 5
         case .type: return 4
@@ -32,6 +32,10 @@ enum Pose: Int, CaseIterable {
     var isEasterEgg: Bool { Self.easterEggs.contains(self) || self == .stretch }
     /// How long a trick plays before the character goes back to idling.
     static let easterEggDuration: TimeInterval = 4
+
+    /// Claude Code's spinner has silly verbs; so do we.
+    static let thinkingVerbs = ["thinking…", "pondering…", "bip-booping…", "cogitating…", "brewing…",
+                                "mulling…", "noodling…", "scheming…", "determining…", "percolating…"]
 
     var caption: String? {
         switch self {
@@ -115,6 +119,8 @@ final class Agent: Identifiable {
     var bubble: String?
     /// Claude is blocked on the user (permission, question, elicitation): show `bubble` in a speech bubble.
     var needsInput = false
+    /// Claude is generating (between a prompt or tool result and the next tool call / Stop).
+    var thinking = false
     var lastEvent = Date()
     var leaving = false
     var poseStarted = Date()
@@ -139,12 +145,20 @@ final class Agent: Identifiable {
         self.label = label; self.tint = tint
     }
 
-    func set(_ pose: Pose, bubble: String? = nil, needsInput: Bool = false) {
+    func set(_ pose: Pose, bubble: String? = nil, needsInput: Bool = false, thinking: Bool = false) {
         self.pose = pose
         self.bubble = bubble
         self.needsInput = needsInput
+        self.thinking = thinking
         poseStarted = Date()
         lastEvent = Date()
+    }
+
+    /// Hand on chin with a random spinner verb; leaves `lastEvent` alone.
+    func think(now: Date) {
+        pose = .think
+        bubble = Pose.thinkingVerbs.randomElement()
+        poseStarted = now
     }
 
     /// Plays a trick without counting as activity, so the idle/sleep countdown keeps running.
@@ -193,7 +207,7 @@ final class SessionModel {
         case "SessionStart":
             main(for: e).set(.spawn, bubble: "hej!")
         case "UserPromptSubmit":
-            main(for: e).set(.idle, bubble: "…")
+            main(for: e).set(.think, bubble: Pose.thinkingVerbs.randomElement(), thinking: true)
         case "SubagentStart":
             let sub = subagent(for: e)
             sub.set(.spawn, bubble: "spawned")
@@ -216,9 +230,10 @@ final class SessionModel {
             target.set(pose, bubble: e.hint)
         case "PostToolUse":
             let target = actor(for: e)
-            // Keep the pose visible for a moment; the tick() will settle it to idle.
+            // Keep the pose visible for a moment; the tick() then switches to thinking until the next tool or Stop.
             target.lastEvent = Date()
             target.needsInput = false   // a tool ran, so any pending permission was granted
+            target.thinking = true
         case "PostToolUseFailure":
             actor(for: e).set(.oops, bubble: e.hint.map { "oops · \($0)" } ?? "oops")
         case "PermissionRequest":
@@ -297,7 +312,7 @@ final class SessionModel {
                 agent.contextTokens = tokens
                 // Context grew: nom nom. Don't interrupt a raised hand (waiting for the user).
                 if let previous, tokens > previous + 1_000, agent.pose != .wait, !agent.leaving {
-                    agent.set(.eat, bubble: "nom nom · +\(ContextMeter.format(tokens - previous))")
+                    agent.set(.eat, bubble: "nom nom · +\(ContextMeter.format(tokens - previous))", thinking: agent.thinking)
                 }
             }
         }
@@ -315,11 +330,18 @@ final class SessionModel {
                 if sincePose > 2.5 { remove.append(a.id) }
                 continue
             }
+            // A Stop that never arrived: don't look busy forever.
+            if a.thinking && sinceEvent > 10 * 60 { a.thinking = false }
             switch a.pose {
             case .spawn, .oops, .wave, .eat:
-                if sincePose > 2 { a.set(.idle, bubble: a.bubble) }
+                if sincePose > 2 { a.thinking ? a.think(now: now) : a.set(.idle, bubble: a.bubble) }
             case .read, .type, .run:
-                if sinceEvent > 4 { a.set(.idle, bubble: nil) }
+                if sinceEvent > 4 { a.thinking ? a.think(now: now) : a.set(.idle, bubble: nil) }
+            case .think:
+                if !a.thinking { a.settle(now: now) }
+                else if sincePose > 12 { a.think(now: now) }    // new verb now and then
+            case .idle where a.thinking:
+                a.think(now: now)
             case .idle:
                 if sinceEvent > 8 { a.bubble = nil }
                 if sinceEvent > 60 {

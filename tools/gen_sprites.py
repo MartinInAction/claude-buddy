@@ -3,11 +3,11 @@
 
 Output: Sources/ClaudeBuddy/Resources/buddy.png (main) and buddy_1..buddy_4.png (tinted clones).
 Sheet layout: 32x32 px frames, 4 columns, one animation per row (unused frames stay empty).
-Rows come in FAT_LEVELS blocks of 15: block 0 is the normal body, each further block is a wider one
+Rows come in FAT_LEVELS blocks of 16: block 0 is the normal body, each further block is a wider one
 (used as the agent's context window fills up; level 2 is sweaty, level 3 dizzy and sweaty).
 Within a block the row order must match `Pose` in Sources/ClaudeBuddy/Model.swift:
   0 idle  1 read  2 type(desk)  3 run  4 wait  5 sleep  6 oops  7 wave  8 spawn  9 eat  10 mine
-  11 coffee  12 dance  13 stretch  14 juggle
+  11 coffee  12 dance  13 stretch  14 juggle  15 think
 Replace these PNGs with your own art as long as you keep the same grid.
 """
 import struct, zlib, os, sys
@@ -175,6 +175,7 @@ class Body:
         elif arms == 'forward': self.arms_forward(f, y, 12)
         elif arms == 'out': self.arms_out(f, y)
         elif arms == 'eat': self.arms_eat(f, y)
+        elif arms == 'chin': self.arms_down(f, y); self.arm_chin(f, y)
         self.ox -= x_off
         self.last_x_off = x_off
 
@@ -229,6 +230,22 @@ class Body:
         if phase % 2 == 0:
             r = max(k for k, n in enumerate(lines) if n)
             f.put(mx + 1 + lines[r], my + 1 + r, 'B')          # blinking cursor
+
+    def arm_chin(self, f, y):
+        """Right arm bent up, hand resting on the chin."""
+        col, outer = self.R(), self.R() + 1
+        for j in range(8, 13): f.put(col, y + j, 'h'); f.put(outer, y + j, 'o')
+        f.put(col, y + 13, 'o'); f.put(outer, y + 13, 'o')
+        f.put(col, y + 7, 's'); f.put(col - 1, y + 7, 's'); f.put(outer, y + 7, 'o')
+        f.put(col, y + 6, 'o'); f.put(col - 1, y + 6, 'o')
+
+    def thought(self, f, phase):
+        """Thought dots rising from the head, then a little cloud."""
+        x = self.ox + self.W
+        dots = [(x, OY), (x + 1, OY - 2), (x + 2, OY - 4)]
+        for k in range(min(phase + 1, 3)): f.put(*dots[k], 'z')
+        if phase >= 3:
+            f.blit([".zzz.", "zzzzz", ".zzz."], x + 2, OY - 8)
 
     def sweat(self, f, phase, side=+1):
         x, y = (self.ox + self.W - 1 if side > 0 else self.ox), OY + 3 + phase
@@ -365,6 +382,10 @@ def make_block(extra, condition='fine'):
     for ph in range(4):
         x = fr(arms='forward'); b.balls(x, ph); balls.append(x)
     rows.append(balls)                                                                                    # juggle
+    think = []
+    for ph in range(4):
+        x = fr(head='blink' if ph == 3 else 'open', arms='chin'); b.thought(x, ph); think.append(x)
+    rows.append(think)                                                                                    # think
     for row in rows:
         for i, f in enumerate(row): b.sweat_overlay(f, i)
     return rows

@@ -40,7 +40,7 @@ position is remembered.
 | Hook event | Pose |
 |---|---|
 | `SessionStart` | sparkles, "hej!" |
-| `UserPromptSubmit` | idle with "…" |
+| `UserPromptSubmit`, and after every `PostToolUse` until the next tool | hand on chin, thought bubble, "pondering…" |
 | `PreToolUse` Read / Grep / Glob / WebFetch | reading a book |
 | `PreToolUse` Edit / Write | sits down at a desk and types, code appearing on the monitor |
 | `PreToolUse` Bash | terminal window |
@@ -71,6 +71,6 @@ Multiple concurrent Claude sessions each get their own character (labelled with 
 
 Sprite sheets live in `Sources/ClaudeBuddy/Resources/buddy.png` (main) and `buddy_1..4.png` (clone tints).
 Grid: 32×32 px frames, 4 columns, one animation per row in this order:
-`idle(4) read(2) type(4) run(2) wait(2) sleep(2) oops(2) wave(2) spawn(2) eat(3) mine(4) coffee(4) dance(4) stretch(3) juggle(4)`,
+`idle(4) read(2) type(4) run(2) wait(2) sleep(2) oops(2) wave(2) spawn(2) eat(3) mine(4) coffee(4) dance(4) stretch(3) juggle(4) think(4)`,
 repeated as one block per fat level (normal → fattest; the app derives the level count from the sheet height).
 Drop in your own PNGs with the same grid and rebuild. Frame counts / fps per row are in `Pose` in `Model.swift`.
