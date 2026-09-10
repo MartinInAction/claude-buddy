@@ -24,7 +24,8 @@ ev SubagentStop '"agent_id":"'$SID'-sub1","agent_type":"Explore"';              
 ev PostToolUseFailure '"tool_name":"Bash","tool_input":{"command":"npm run typecheck"}'; sleep 2.5
 ev PermissionRequest '"tool_name":"Bash","tool_input":{"command":"git push"}';       sleep 3
 ev PostToolUse '"tool_name":"Bash"';                                                 sleep 1
-ev Notification '"notification_type":"agent_needs_input","message":"Which library should we use for dates?"'; sleep 3
+ev PreToolUse '"tool_name":"AskUserQuestion","tool_input":{"questions":[{"question":"Which library should we use for dates?"}]}'; sleep 1
+ev Notification '"notification_type":"agent_needs_input","message":"Claude needs your input"'; sleep 3
 ev Stop;                                                                             sleep 3
 ev SessionEnd
 echo "replay done"

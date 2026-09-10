@@ -101,8 +101,22 @@ struct BuddyEvent {
     }
 
     /// The notification message, trimmed to fit a two-line speech bubble.
-    var question: String? {
-        guard let m = message?.trimmingCharacters(in: .whitespacesAndNewlines), !m.isEmpty else { return nil }
+    var question: String? { message.flatMap(Self.bubbleText) }
+
+    /// The actual question Claude is asking the user, when the event is an `AskUserQuestion` or `ExitPlanMode` call.
+    var askedQuestion: String? {
+        switch toolName {
+        case "AskUserQuestion":
+            let qs = (toolInput["questions"] as? [[String: Any]] ?? []).compactMap { $0["question"] as? String }
+            return qs.isEmpty ? "your turn!" : Self.bubbleText(qs.joined(separator: " · ")) ?? "your turn!"
+        case "ExitPlanMode": return "plan's ready · approve?"
+        default: return nil
+        }
+    }
+
+    private static func bubbleText(_ raw: String) -> String? {
+        let m = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !m.isEmpty else { return nil }
         let oneLine = m.split(whereSeparator: \.isNewline).joined(separator: " ")
         return oneLine.count > 60 ? String(oneLine.prefix(59)) + "…" : oneLine
     }
@@ -219,6 +233,7 @@ final class SessionModel {
             }
         case "PreToolUse":
             let target = actor(for: e)
+            if let q = e.askedQuestion { target.set(.wait, bubble: q, needsInput: true); break }
             let pose: Pose
             switch e.toolName ?? "" {
             case "Read", "Grep", "Glob", "WebFetch", "WebSearch", "NotebookRead", "LS": pose = .read
@@ -237,13 +252,17 @@ final class SessionModel {
         case "PostToolUseFailure":
             actor(for: e).set(.oops, bubble: e.hint.map { "oops · \($0)" } ?? "oops")
         case "PermissionRequest":
-            actor(for: e).set(.wait, bubble: e.hint.map { "may I? \($0)" } ?? "may I?", needsInput: true)
+            actor(for: e).set(.wait, bubble: e.askedQuestion ?? e.hint.map { "may I? \($0)" } ?? "may I?", needsInput: true)
         case "Notification":
+            // The tool call itself (AskUserQuestion / PermissionRequest) already put the specific text in the bubble;
+            // the notification only carries a generic "Claude needs your input", so keep what is there.
+            let m = main(for: e)
+            let keep = m.needsInput ? m.bubble : nil
             switch e.notificationType ?? "" {
             case "permission_prompt":
-                main(for: e).set(.wait, bubble: e.question ?? "may I?", needsInput: true)
+                m.set(.wait, bubble: keep ?? e.question ?? "may I?", needsInput: true)
             case "agent_needs_input", "elicitation_dialog":
-                main(for: e).set(.wait, bubble: e.question ?? "your turn!", needsInput: true)
+                m.set(.wait, bubble: keep ?? e.question ?? "your turn!", needsInput: true)
             case "idle_prompt":
                 main(for: e).set(.idle, bubble: nil)
             default: break
