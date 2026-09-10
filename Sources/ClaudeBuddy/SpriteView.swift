@@ -218,7 +218,8 @@ struct CharacterView: View {
 struct SpeechBubble: View {
     let text: String
     let date: Date
-    var maxWidth: CGFloat = Cell.character + 24
+    /// Wider than the character column so a real question fits; it may hang over the neighbouring column.
+    var maxWidth: CGFloat = Cell.width - 12
 
     private var bob: CGFloat {
         CGFloat(sin(date.timeIntervalSinceReferenceDate * 2 * .pi / 1.2) * 1.5)
@@ -228,8 +229,9 @@ struct SpeechBubble: View {
         VStack(spacing: 0) {
             Text(text)
                 .font(.system(size: 7.5, weight: .medium, design: .monospaced))
-                .lineLimit(2)
+                .lineLimit(4)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 6).padding(.vertical, 3)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.primary.opacity(0.25), lineWidth: 0.5))

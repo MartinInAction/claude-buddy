@@ -100,7 +100,7 @@ struct BuddyEvent {
         return "\(label) · \(firstLine.count > 44 ? String(firstLine.prefix(43)) + "…" : firstLine)"
     }
 
-    /// The notification message, trimmed to fit a two-line speech bubble.
+    /// The notification message, trimmed to fit the speech bubble (about four lines).
     var question: String? { message.flatMap(Self.bubbleText) }
 
     /// The actual question Claude is asking the user, when the event is an `AskUserQuestion` or `ExitPlanMode` call.
@@ -118,7 +118,7 @@ struct BuddyEvent {
         let m = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !m.isEmpty else { return nil }
         let oneLine = m.split(whereSeparator: \.isNewline).joined(separator: " ")
-        return oneLine.count > 60 ? String(oneLine.prefix(59)) + "…" : oneLine
+        return oneLine.count > 120 ? String(oneLine.prefix(119)) + "…" : oneLine
     }
 }
 
