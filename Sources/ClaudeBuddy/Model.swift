@@ -93,6 +93,13 @@ final class Agent: Identifiable {
         return min(1, Double(t) / Double(ContextMeter.window))
     }
 
+    /// Sprite fat level: 0 below 25 % of the window, then one step per further 25 %.
+    var fatLevel: Int {
+        let levels = SpriteSheets.shared.fatLevels
+        guard levels > 1 else { return 0 }
+        return min(levels - 1, Int(contextFraction * Double(levels)))
+    }
+
     init(id: String, sessionID: String, isSubagent: Bool, label: String, tint: Int) {
         self.id = id; self.sessionID = sessionID; self.isSubagent = isSubagent
         self.label = label; self.tint = tint

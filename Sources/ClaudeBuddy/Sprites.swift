@@ -2,38 +2,24 @@ import AppKit
 import SwiftUI
 
 /// Loads the sprite sheets and slices them into per-frame images.
-/// Sheet: 32x32 frames, 4 columns, one animation (Pose) per row. See tools/gen_sprites.py.
+/// Sheet: 32x32 frames, 4 columns, one animation (Pose) per row, repeated in blocks per fat level. See tools/gen_sprites.py.
 final class SpriteSheets {
     static let frameSize = 32
     static let columns = 4
     static let shared = SpriteSheets()
 
     private var frames: [Int: [[CGImage]]] = [:]   // tint -> row -> frames
-    private var scaledCache: [String: CGImage] = [:]
-    private let lock = NSLock()
+    /// Number of fat levels in the sheet (blocks of `Pose.allCases.count` rows). Matches FAT_LEVELS in gen_sprites.py.
+    var fatLevels: Int { (frames[0]?.count ?? 0) / Pose.allCases.count }
 
-    /// A frame pre-scaled with nearest-neighbour sampling to an exact pixel size, so stretched
-    /// sprites stay crisp (SwiftUI's own resizing blurs non-integer scales).
-    func scaledFrame(tint: Int, pose: Pose, index: Int, pixelWidth: Int, pixelHeight: Int) -> CGImage? {
-        guard let src = frame(tint: tint, pose: pose, index: index), pixelWidth > 0, pixelHeight > 0 else { return nil }
-        let key = "\(tint)-\(pose.rawValue)-\(index % pose.frameCount)-\(pixelWidth)x\(pixelHeight)"
-        lock.lock(); defer { lock.unlock() }
-        if let hit = scaledCache[key] { return hit }
-        guard let ctx = CGContext(data: nil, width: pixelWidth, height: pixelHeight, bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.interpolationQuality = .none
-        ctx.draw(src, in: CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
-        guard let out = ctx.makeImage() else { return nil }
-        if scaledCache.count > 400 { scaledCache.removeAll() }
-        scaledCache[key] = out
-        return out
-    }
-
-    func frame(tint: Int, pose: Pose, index: Int) -> CGImage? {
+    /// `level` 0 = normal body; higher = fatter (falls back to the fattest available level).
+    func frame(tint: Int, pose: Pose, index: Int, level: Int = 0) -> CGImage? {
         let sheet = frames[tint] ?? frames[0]
-        guard let rows = sheet, pose.row < rows.count, !rows[pose.row].isEmpty else { return nil }
-        let row = rows[pose.row]
+        guard let rows = sheet, !rows.isEmpty else { return nil }
+        let lvl = max(0, min(level, fatLevels - 1))
+        let rowIndex = lvl * Pose.allCases.count + pose.row
+        guard rowIndex < rows.count, !rows[rowIndex].isEmpty else { return nil }
+        let row = rows[rowIndex]
         return row[index % min(row.count, pose.frameCount)]
     }
 

@@ -53,14 +53,12 @@ struct CharacterView: View {
 
     @ViewBuilder private var sprite: some View {
         let size = CGFloat(SpriteSheets.frameSize) * scale
-        // The character gets fatter as its context window fills up: 1x wide when empty, 2x when full.
-        let fat = 1 + CGFloat(agent?.contextFraction ?? 0)
-        let backing = NSScreen.main?.backingScaleFactor ?? 2
-        let w = (size * fat).rounded(), h = size
-        if let cg = SpriteSheets.shared.scaledFrame(tint: agent?.tint ?? 0, pose: pose, index: frameIndex,
-                                                    pixelWidth: Int(w * backing), pixelHeight: Int(h * backing)) {
-            Image(decorative: cg, scale: backing)
-                .frame(width: w, height: h)
+        // The character gets fatter as its context window fills up (dedicated sprites per level).
+        if let cg = SpriteSheets.shared.frame(tint: agent?.tint ?? 0, pose: pose, index: frameIndex, level: agent?.fatLevel ?? 0) {
+            Image(decorative: cg, scale: 1)
+                .interpolation(.none)
+                .resizable()
+                .frame(width: size, height: size)
         } else {
             RoundedRectangle(cornerRadius: 6).fill(.orange).frame(width: size, height: size)
         }
@@ -85,7 +83,7 @@ struct CharacterView: View {
             .lineLimit(1)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(.regularMaterial, in: Capsule())
-            .frame(maxWidth: CGFloat(SpriteSheets.frameSize) * scale * 2 + 24)
+            .frame(maxWidth: CGFloat(SpriteSheets.frameSize) * scale + 40)
             .opacity(agent == nil ? 0.5 : 1)
     }
 }

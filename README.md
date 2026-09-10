@@ -51,14 +51,15 @@ Events carry `agent_id`, so tool calls made *inside* a subagent animate that clo
 
 **Context size = body size.** Every event names the session's transcript; the app reads the tail of that
 `.jsonl` (or the subagent's file under `<session>/subagents/`) and takes the latest assistant turn's
-input + cache tokens as the context in use. The sprite is stretched horizontally from 1× (empty) to 2×
-(window full) and the label shows the count, e.g. `shack-products · 115k`. The window size (200k or 1M)
-is a toggle in the menu bar.
+input + cache tokens as the context in use. The sheet has four body widths; the character steps up one
+size for every 25 % of the window used, and the label shows the count, e.g. `shack-products · 115k`.
+The window size (200k or 1M) is a toggle in the menu bar.
 Multiple concurrent Claude sessions each get their own character (labelled with the project folder).
 
 ## Replace the art
 
 Sprite sheets live in `Sources/ClaudeBuddy/Resources/buddy.png` (main) and `buddy_1..4.png` (clone tints).
 Grid: 32×32 px frames, 4 columns, one animation per row in this order:
-`idle(4) read(2) type(2) run(2) wait(2) sleep(2) oops(2) wave(2) spawn(2)`.
+`idle(4) read(2) type(2) run(2) wait(2) sleep(2) oops(2) wave(2) spawn(2)`,
+repeated as one block per fat level (normal → fattest; the app derives the level count from the sheet height).
 Drop in your own PNGs with the same grid and rebuild. Frame counts / fps per row are in `Pose` in `Model.swift`.
