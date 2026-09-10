@@ -66,12 +66,16 @@ struct FamilyView: View {
 
     var body: some View {
         let (left, right) = sides
-        HStack(alignment: .bottom, spacing: 2) {
-            columns(left, mirrored: true)
-            CharacterView(agent: family.main, date: date)
-            columns(right, mirrored: false)
+        VStack(spacing: 4) {
+            // Project title over the whole session, solo or group.
+            Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: 260)
+            HStack(alignment: .bottom, spacing: 4) {
+                columns(left, mirrored: true)
+                CharacterView(agent: family.main, date: date)
+                columns(right, mirrored: false)
+            }
         }
-        .padding(.horizontal, family.subs.isEmpty ? 0 : 4)
+        .padding(.horizontal, 4)
     }
 
     /// Chunks of two subagents stacked vertically; the first chunk sits next to the main character.
@@ -136,6 +140,30 @@ struct FlowLayout: Layout {
     }
 }
 
+func contextSuffix(_ agent: Agent?) -> String {
+    agent?.contextTokens.map { " · \(ContextMeter.format($0))" } ?? ""
+}
+
+/// Small material pill used for titles, labels and descriptions.
+struct Pill: View {
+    let text: String
+    var size: CGFloat = 7.5
+    var weight: Font.Weight = .semibold
+    var design: Font.Design = .monospaced
+    var maxWidth: CGFloat = 140
+    var dim = false
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: size, weight: weight, design: design))
+            .foregroundStyle(dim ? .secondary : .primary)
+            .lineLimit(1)
+            .padding(.horizontal, 5).padding(.vertical, 1.5)
+            .background(.regularMaterial, in: Capsule())
+            .frame(maxWidth: maxWidth)
+    }
+}
+
 struct CharacterView: View {
     let agent: Agent?
     let date: Date
@@ -145,9 +173,8 @@ struct CharacterView: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            bubble
             sprite
-            label
+            description
         }
         .opacity((agent?.leaving ?? false) ? 0.55 : 1)
     }
@@ -170,26 +197,13 @@ struct CharacterView: View {
         }
     }
 
-    @ViewBuilder private var bubble: some View {
-        let text = agent?.bubble
-        Text(text ?? " ")
-            .font(.system(size: 9, weight: .medium, design: .rounded))
-            .lineLimit(1)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(.white.opacity(0.15)))
-            .opacity(text == nil ? 0 : 1)
-            .frame(maxWidth: 160)
-    }
-
-    @ViewBuilder private var label: some View {
-        let ctx = agent?.contextTokens.map { " · \(ContextMeter.format($0))" } ?? ""
-        Text((agent?.label ?? "zzz") + ctx)
-            .font(.system(size: 7.5, weight: .semibold, design: .monospaced))
-            .lineLimit(1)
-            .padding(.horizontal, 5).padding(.vertical, 1.5)
-            .background(.regularMaterial, in: Capsule())
-            .frame(maxWidth: CGFloat(SpriteSheets.frameSize) * scale + 60)
-            .opacity(agent == nil ? 0.5 : 1)
+    /// Who this is and what it is doing right now, under the sprite.
+    @ViewBuilder private var description: some View {
+        let name = agent == nil ? "no session" : ((agent?.isSubagent ?? false) ? (agent?.label ?? "agent") : "main")
+        let doing = agent == nil ? "waiting for Claude Code" : (agent?.bubble ?? (agent?.pose == .sleep ? "sleeping" : "idle"))
+        VStack(spacing: 1) {
+            Pill(text: name + contextSuffix(agent), maxWidth: 170)
+            Pill(text: doing, weight: .regular, maxWidth: 170, dim: true)
+        }
     }
 }

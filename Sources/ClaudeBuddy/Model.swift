@@ -146,7 +146,7 @@ final class SessionModel {
             main(for: e).set(.idle, bubble: "…")
         case "SubagentStart":
             let sub = subagent(for: e)
-            sub.set(.spawn, bubble: sub.label)
+            sub.set(.spawn, bubble: "spawned")
             main(for: e).set(.idle, bubble: "delegating…")
         case "SubagentStop":
             if let sub = agents.first(where: { $0.id == e.agentID }) {
