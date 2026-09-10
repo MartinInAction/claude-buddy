@@ -79,9 +79,8 @@ struct FamilyView: View {
         let members = [family.main] + family.subs
         let rows = stride(from: 0, to: members.count, by: Self.perRow).map { Array(members[$0..<min($0 + Self.perRow, members.count)]) }
         VStack(spacing: 4) {
-            // Never wider than the characters below it: a long project name gets an ellipsis.
-            let titleWidth = members.count > 1 ? Cell.character * 2 + 4 : Cell.character
-            Pill(text: family.main.label + contextSuffix(family.main), size: 9, weight: .semibold, maxWidth: titleWidth)
+            // A long project name wraps onto a second line and only then gets an ellipsis.
+            TitlePill(title: family.main.label, detail: family.main.contextTokens.map(ContextMeter.format), width: Cell.width - 8)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .bottom, spacing: 4) {
                     ForEach(row) { member in
@@ -98,6 +97,33 @@ struct FamilyView: View {
 
 func contextSuffix(_ agent: Agent?) -> String {
     agent?.contextTokens.map { " · \(ContextMeter.format($0))" } ?? ""
+}
+
+/// Session title: the project name (wrapping onto two lines if needed) with the context size on the right.
+struct TitlePill: View {
+    let title: String
+    let detail: String?
+    let width: CGFloat
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, 6).padding(.vertical, 2)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 7))
+        .frame(maxWidth: width)
+    }
 }
 
 /// Small material pill used for titles, labels and descriptions.
